@@ -1,0 +1,7 @@
+# 個人情報・実データ・社内メモは公開しない
+data.js
+tests/
+次のステップ.md
+*.command
+*_backup_*.json
+.DS_Store

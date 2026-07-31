@@ -1,0 +1,23 @@
+{
+  "name": "内覧会 スケジュール調整",
+  "short_name": "内覧会スケジュール",
+  "description": "インスペクションの担当を決めるためのスケジュール調整ツール。オフラインでも使えます。",
+  "lang": "ja",
+  "dir": "ltr",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f6f7f9",
+  "theme_color": "#111827",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "調整ボード", "url": "./index.html#board" },
+    { "name": "申請の承認", "url": "./index.html#approve" },
+    { "name": "物件一覧", "url": "./index.html#props" }
+  ]
+}

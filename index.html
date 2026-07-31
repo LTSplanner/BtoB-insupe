@@ -1,0 +1,1098 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>内覧会 スケジュール調整</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#111827">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="内覧会スケジュール">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<style>
+:root{
+  --bg:#f6f7f9; --panel:#fff; --line:#e3e6ea; --text:#1d2329; --sub:#6b7480;
+  --accent:#2563eb; --accent-soft:#eff4ff;
+  --int:#0f9d76; --int-soft:#e7f6f1;
+  --ext:#d97706; --ext-soft:#fdf3e3;
+  --req:#7c3aed; --req-soft:#f3edff;
+  --ng:#dc2626; --ng-soft:#fdecec;
+  --radius:10px;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic",sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.6}
+header{background:#111827;color:#fff;padding:12px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+header h1{font-size:16px;margin:0;font-weight:600}
+header .tag{font-size:11px;background:#374151;padding:2px 8px;border-radius:99px;color:#d1d5db}
+nav{display:flex;gap:4px;padding:0 20px;background:var(--panel);border-bottom:1px solid var(--line);overflow-x:auto}
+nav button{background:none;border:none;padding:12px 14px;font-size:14px;cursor:pointer;color:var(--sub);border-bottom:2px solid transparent;white-space:nowrap;font-family:inherit;display:flex;align-items:center;gap:6px}
+nav button.on{color:var(--accent);border-bottom-color:var(--accent);font-weight:600}
+nav .n{background:var(--req);color:#fff;border-radius:99px;font-size:11px;padding:0 6px;min-width:18px;text-align:center;font-weight:700}
+main{padding:20px;max-width:1400px;margin:0 auto}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px;margin-bottom:16px}
+.card h2{font-size:15px;margin:0 0 12px;display:flex;align-items:center;gap:8px}
+.card h3{font-size:13px;margin:16px 0 8px;color:var(--sub)}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+label{display:block;font-size:12px;color:var(--sub);margin-bottom:4px}
+input,select,textarea{font-family:inherit;font-size:14px;padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:#fff;color:var(--text)}
+textarea{width:100%;min-height:150px;line-height:1.7}
+button.btn{font-family:inherit;font-size:13px;padding:8px 14px;border-radius:6px;border:1px solid var(--line);background:#fff;cursor:pointer}
+button.btn:hover{background:#f3f4f6}
+button.btn.pri{background:var(--accent);color:#fff;border-color:var(--accent)}
+button.btn.pri:hover{filter:brightness(1.1)}
+button.btn.ok{background:var(--int);color:#fff;border-color:var(--int)}
+button.btn.danger{color:var(--ng);border-color:#f3c9c9}
+button.btn.sm{padding:4px 9px;font-size:12px}
+button.btn:disabled{opacity:.4;cursor:not-allowed}
+.muted{color:var(--sub);font-size:12px}
+table.grid{border-collapse:separate;border-spacing:0;width:100%;font-size:13px}
+table.grid th,table.grid td{border-bottom:1px solid var(--line);padding:0;text-align:center}
+table.grid th.name,table.grid td.name{text-align:left;padding:6px 10px;white-space:nowrap;position:sticky;left:0;background:var(--panel);z-index:2;border-right:1px solid var(--line)}
+table.grid thead th{background:#fafbfc;padding:6px 4px;font-weight:600;font-size:12px}
+table.grid thead th .dnum{font-size:15px}
+table.grid thead th.we{color:var(--ng)}
+table.grid thead th.sa{color:var(--accent)}
+.cell{width:100%;height:38px;border:none;background:none;cursor:pointer;font-size:15px;font-family:inherit;color:#c4c9cf}
+.cell:hover{background:#f1f5f9}
+.cell.hold{background:var(--int-soft);color:var(--int);font-weight:700}
+.cell.confirmed{background:var(--ext-soft);color:var(--ext);font-weight:700}
+.cell.requested{background:var(--req-soft);color:var(--req);font-weight:700;font-size:12px}
+.cell.ng{background:repeating-linear-gradient(45deg,#fafafa,#fafafa 4px,#f1f1f1 4px,#f1f1f1 8px);cursor:not-allowed;color:#dfe3e7}
+.cell.off{background:#eceff3;color:#98a0aa;cursor:not-allowed;font-size:12px;font-weight:700}
+.cell.conflict{background:var(--ng-soft) !important;color:var(--ng) !important}
+.grp{background:#f0f2f5;font-size:11px;color:var(--sub);padding:4px 10px;text-align:left;font-weight:600;letter-spacing:.04em}
+.cap{font-size:11px;font-weight:700}
+.cap.ok{color:var(--int)} .cap.short{color:var(--ext)} .cap.over{color:var(--ng)}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.chip{border:1px solid var(--line);border-radius:99px;padding:5px 12px;font-size:13px;background:#fff;cursor:pointer}
+.chip.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.chip.full{background:#f4f4f5;color:#b6bbc1;cursor:not-allowed;text-decoration:line-through}
+.chip.req{background:var(--req-soft);border-color:var(--req);color:var(--req);font-weight:700}
+.chip.cfm{background:var(--ext-soft);border-color:var(--ext);color:var(--ext);font-weight:700}
+.alert{border-radius:8px;padding:10px 12px;margin:8px 0;font-size:13px;border:1px solid}
+.alert.err{background:var(--ng-soft);border-color:#f3c9c9;color:#a01f1f}
+.alert.warn{background:#fff8e6;border-color:#f2dfae;color:#8a6100}
+.alert.ok{background:var(--int-soft);border-color:#b9e5d7;color:#0a6b51}
+.alert.info{background:var(--req-soft);border-color:#ddd0f7;color:#5b21b6}
+.plist{display:grid;gap:10px}
+.pitem{border:1px solid var(--line);border-radius:8px;padding:12px;display:flex;justify-content:space-between;gap:12px;align-items:center;cursor:pointer;background:#fff}
+.pitem:hover{border-color:var(--accent);background:var(--accent-soft)}
+.pitem.on{border-color:var(--accent);border-width:2px;background:var(--accent-soft)}
+.pitem b{font-size:15px}
+.badge{font-size:11px;padding:2px 8px;border-radius:99px;background:#eef0f3;color:var(--sub)}
+.badge.st-調整中{background:#fff3d6;color:#8a6100}
+.badge.st-確定{background:var(--int-soft);color:var(--int)}
+.badge.st-図面待ち{background:#eef0f3;color:var(--sub)}
+.badge.st-完了{background:#eef0f3;color:#9aa2ab}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--sub);margin-top:10px}
+.legend span i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.scroll{overflow-x:auto}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:900px){.two{grid-template-columns:1fr}}
+.kv{display:flex;gap:8px;font-size:13px;padding:3px 0}
+.kv b{width:90px;color:var(--sub);font-weight:400;flex-shrink:0}
+.mono{font-family:ui-monospace,Menlo,monospace;font-size:12px}
+.back{display:inline-flex;align-items:center;gap:6px;background:none;border:none;font-family:inherit;font-size:13px;color:var(--accent);cursor:pointer;padding:0;margin-bottom:10px}
+.task{display:flex;gap:10px;align-items:flex-start;padding:8px 4px;border-bottom:1px solid var(--line);cursor:pointer;font-size:13px}
+.task:last-child{border-bottom:none}
+.task input{margin-top:3px;width:17px;height:17px;flex-shrink:0;accent-color:var(--int)}
+.task.done>span{color:var(--sub);text-decoration:line-through;text-decoration-color:#c9ced4}
+.task.done .muted{text-decoration:none}
+.bar{display:inline-block;width:110px;height:7px;background:var(--line);border-radius:99px;overflow:hidden;vertical-align:middle;margin-left:8px}
+.bar i{display:block;height:100%;background:var(--int);border-radius:99px}
+.minibar{display:inline-block;width:70px;height:5px;background:var(--line);border-radius:99px;overflow:hidden;vertical-align:middle;margin:0 6px}
+.minibar i{display:block;height:100%;background:var(--int)}
+.back:hover{text-decoration:underline}
+.reqrow{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px dashed var(--line);flex-wrap:wrap}
+.reqrow:last-child{border-bottom:none}
+</style>
+</head>
+<body>
+<header>
+  <h1 id="appTitle">内覧会 スケジュール調整</h1>
+  <span class="tag">プロトタイプ v0.3</span>
+  <span class="tag" id="ruleTag"></span>
+  <span class="tag" id="netTag" style="margin-left:auto"></span>
+  <button class="btn sm" id="installBtn" hidden onclick="doInstall()">アプリとして追加</button>
+</header>
+<nav>
+  <button data-tab="board" class="on">調整ボード</button>
+  <button data-tab="approve">申請の承認 <span class="n" id="nReq"></span></button>
+  <button data-tab="props">物件</button>
+  <button data-tab="book">予約画面（インスペさん）</button>
+  <button data-tab="msg">連絡文・カレンダー</button>
+  <button data-tab="members">メンバー / ルール</button>
+</nav>
+<main>
+  <section id="tab-board"></section>
+  <section id="tab-approve" hidden></section>
+  <section id="tab-props" hidden></section>
+  <section id="tab-book" hidden></section>
+  <section id="tab-msg" hidden></section>
+  <section id="tab-members" hidden></section>
+</main>
+
+<script src="data.js"></script>
+<script>
+/* ============================================================
+   ドメインモデル
+   ------------------------------------------------------------
+   Assignment.status
+     hold      : 自社スタッフの仮押さえ（枠を消費する）
+     requested : 外部インスペからの希望申請（枠を消費しない・重複可）
+     confirmed : 確定（枠を消費する）
+   ============================================================ */
+const RULES_DEFAULT = {
+  maxPerDay: 2,               // 1日あたり最大2名（アカウントの関係・厳守）
+  maxExternalPerProperty: 2,  // 外部インスペ：1棟あたり最大2名（厳守）
+  maxExternalPerDay: 2,       // 外部インスペ：1日あたり最大2名（厳守）
+  defaultNeeded: 4,           // 1棟あたりの必要のべ人数（1F3部屋＋共用12部屋＋4F共用＋外構 で4名がベース）
+  roomsPerPerson: 3,          // 3部屋＋共用部で1人ベース
+  countTrainees: false,       // 研修中スタッフを1日2名の人数に数えるか（既定：数えない）
+  // 打診は「先方から日付が届き始めたらすぐ」開始してよい（＝検査期間が入った時点で打診可）
+  // Googleカレンダーの予定タイトル。実際の運用に合わせた形式
+  titleTemplate: '{名前}さん　{元請け}　{コード}　{住所}'
+};
+
+const D = (typeof window!=='undefined' && window.APP_DATA) || {};
+const SEED_MEMBERS = D.members || [];
+const ORGANIZER = D.organizer || '';
+const CLIENT = D.clientName || '元請け';      // 発注元の名前（data.js が無ければ伏せる）
+const SENDER = D.senderName || '弊社';        // 連絡文の差出人
+/* 既存スケジュール（data.js から読み込む。公開ページでは空） */
+const PAPAMAHALO = D.papamahalo || [];
+/* "MM-DD" を物件の年に合わせて "YYYY-MM-DD" に戻す（年をまたぐ物件に対応） */
+function md2date(r, md){
+  const y1 = r.start.slice(0,4), y2 = r.end.slice(0,4);
+  const c1 = y1+'-'+md;
+  return (c1>=r.start && c1<=r.end) ? c1 : y2+'-'+md;
+}
+const EXT_IDS = ['sugihara','kon','ito'];
+/* 1件ぶんを物件＋アサインに展開 */
+function expand(r, today){
+  const hasExt = Object.keys(r.a||{}).some(function(m){ return EXT_IDS.indexOf(m)>=0; });
+  const prop = {id:'pm-'+r.code, name:r.addr, address:r.addr, code:r.code, units:'', note:r.note||'',
+    status: r.end<today ? '完了' : (hasExt?'確定':'調整中'),
+    start:r.start, end:r.end, rooms:null, needed:RULES_DEFAULT.defaultNeeded, history:[]};
+  const asg = [];
+  Object.keys(r.a||{}).forEach(function(mid){
+    r.a[mid].forEach(function(md){
+      asg.push({id:uid(), propertyId:prop.id, memberId:mid, date:md2date(r,md),
+                status: EXT_IDS.indexOf(mid)>=0 ? 'confirmed' : 'hold'});
+    });
+  });
+  return {prop, asg};
+}
+/* 登録済みのものは飛ばして追加読み込み */
+function importPapamahalo(){
+  const today = d2s(new Date());
+  let added=0, skipped=0;
+  PAPAMAHALO.forEach(function(r){
+    if(S.properties.some(function(p){return p.code===r.code})){ skipped++; return; }
+    const e = expand(r, today);
+    S.properties.push(e.prop);
+    e.asg.forEach(function(a){ S.assignments.push(a); });
+    added++;
+  });
+  save(); render();
+  alert(added+'件を読み込みました。'+(skipped?'（'+skipped+'件は登録済みのためスキップ）':''));
+}
+
+const FRESH = !load();
+let S = load() || {
+  members: SEED_MEMBERS,
+  rules: {...RULES_DEFAULT},
+  properties: [],
+  assignments: [],
+  offs: [],                       // 自社スタッフのOFF … {memberId, date, reason}
+  tasks: {},                      // 物件ごとの業務チェック … {propertyId:{taskKey:true}}
+  ui: {curProp:'', bookAs:'sugihara'}
+};
+S.rules = {...RULES_DEFAULT, ...S.rules};
+if(!S.offs) S.offs = [];
+if(!S.tasks) S.tasks = {};
+
+function save(){ localStorage.setItem('pm_sched_v3', JSON.stringify(S)); }
+function load(){ try{ return JSON.parse(localStorage.getItem('pm_sched_v3')); }catch(e){ return null; } }
+const uid = () => Math.random().toString(36).slice(2,9);
+
+/* ---- 日付 ---- */
+const WD = ['日','月','火','水','木','金','土'];
+function d2s(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+function s2d(s){ const [y,m,dd]=s.split('-').map(Number); return new Date(y,m-1,dd); }
+function fmt(s){ const d=s2d(s); return `${d.getMonth()+1}/${d.getDate()}(${WD[d.getDay()]})`; }
+function fmtLong(s){ const d=s2d(s); return `${d.getMonth()+1}月${d.getDate()}日(${WD[d.getDay()]})`; }
+function range(start,end){ const out=[]; const d=s2d(start), e=s2d(end); while(d<=e){ out.push(d2s(d)); d.setDate(d.getDate()+1); } return out; }
+function addDays(s,n){ const d=s2d(s); d.setDate(d.getDate()+n); return d2s(d); }
+
+/* ---- 参照 ---- */
+const M  = id => S.members.find(m=>m.id===id);
+const P  = id => S.properties.find(p=>p.id===id);
+const curP = () => P(S.ui.curProp) || S.properties[0];
+const asgOf = pid => S.assignments.filter(a=>a.propertyId===pid);
+const find = (pid,mid,date) => S.assignments.find(a=>a.propertyId===pid&&a.memberId===mid&&a.date===date);
+const isExt = mid => M(mid).type==='external';
+const isTrainee = mid => M(mid).type==='trainee';
+/* 人数としてカウントするか（研修中は既定でカウントしない） */
+const counts = a => a.status!=='requested' && (S.rules.countTrainees || !isTrainee(a.memberId));
+/* 枠を消費しているアサイン（hold + confirmed） */
+const booked = (pid,date) => asgOf(pid).filter(a=>a.date===date && counts(a));
+const extConfirmedIn = pid => [...new Set(asgOf(pid).filter(a=>a.status==='confirmed'&&isExt(a.memberId)).map(a=>a.memberId))];
+
+/* ---- 必要のべ人数 ---- */
+const needOf = p => p.needed || S.rules.defaultNeeded;
+/* 枠を消費しているアサインの合計（＝のべ何名確保できたか） */
+const totalBooked = pid => asgOf(pid).filter(counts).length;
+/* 部屋数から必要のべ人数を出す（3部屋＋共用部で1人ベース） */
+const neededFromRooms = rooms => Math.max(1, Math.ceil(rooms / S.rules.roomsPerPerson));
+
+/* ---- 物件コード（260724-0726 形式）と予定タイトル ---- */
+function autoCode(s,e){ return s.replace(/-/g,'').slice(2)+'-'+e.replace(/-/g,'').slice(4); }
+const pcode = p => p.code || autoCode(p.start,p.end);
+function evTitle(p,m){
+  return (S.rules.titleTemplate||'{名前}さん　{元請け}　{コード}　{住所}')
+    .replace('{名前}', m?m.name:'').replace('{元請け}', CLIENT).replace('{コード}', pcode(p))
+    .replace('{住所}', p.address||'').replace('{物件名}', p.name||'');
+}
+/* データが空のときの案内 */
+function emptyState(){
+  return backBar()+`<div class="card">
+    <h2>まだデータがありません</h2>
+    <div class="muted">この端末には物件が登録されていません。次のどちらかで始めてください。</div>
+    <div class="row" style="margin-top:12px;gap:8px">
+      <label class="btn pri" style="margin:0">バックアップファイルから復元
+        <input type="file" accept="application/json,.json" style="display:none" onchange="restore(this)"></label>
+      <button class="btn" onclick="go('props')">物件を手入力で登録する</button>
+    </div>
+    <div class="muted" style="margin-top:12px">※ Macで使っている方の「メンバー / ルール」→「バックアップを保存」で作ったファイルを読み込むと、そのまま続きから使えます。</div>
+  </div>`;
+}
+function sampleTitle(){
+  const ex = S.members.filter(m=>m.type==='external')[0];
+  if(!S.properties.length || !ex) return '〇〇さん　'+CLIENT+'　261022-1025　〇〇1丁目';
+  return evTitle(curP(), ex);
+}
+
+/* 物件切り替えのプルダウン */
+function propSelect(){
+  const sorted = S.properties.slice().sort((a,b)=>a.start<b.start?-1:1);
+  return `<select onchange="S.ui.curProp=this.value;save();render()" style="max-width:340px">
+    ${sorted.map(x=>`<option value="${x.id}" ${x.id===S.ui.curProp?'selected':''}>${pcode(x)}　${x.name}</option>`).join('')}
+  </select>`;
+}
+
+/* ------------------------------------------------------------
+   物件ごとの業務チェックリスト（スプレッドシート「業務の棚卸し」より）
+   auto があるものはアプリの状態から自動で判定する
+   ------------------------------------------------------------ */
+const TASKS = [
+  {k:'docs',   label:'資料一式を受領（意匠図・工程表）'},
+  {k:'folder', label:'案件ドライブにフォルダ作成', hint:'フォルダ名は「コード　物件住所名」で統一'},
+  {k:'term',   label:'工程表から検査可能日程を抽出', auto:p=>!!(p.start&&p.end)},
+  {k:'pdf',    label:'図面を部屋ごとに切り抜き→PDF変換', hint:'12部屋＋共用部4F分＋外構＝17。ピロティは外構にまとめる'},
+  {k:'hold',   label:'LTSスタッフでカレンダーを抑える', auto:p=>totalBooked(p.id)>=needOf(p)},
+  {k:'ask',    label:'外部インスペに打診', hint:'先方から日付が届いたらすぐ開始してOK'},
+  {k:'fix',    label:'外部インスペ確定・カレンダー招待', auto:p=>extConfirmedIn(p.id).length>0},
+  {k:'order',  label:'発注書を確認・押印して返送', hint:'1部屋15,000円／共用部2F分15,000円／外構15,000円'},
+  {k:'report', label:'報告書を提出'},
+  {k:'invoice',label:'請求書を作成'},
+];
+function taskDone(p,t){
+  if(t.auto) return !!t.auto(p);
+  return !!(S.tasks && S.tasks[p.id] && S.tasks[p.id][t.k]);
+}
+function toggleTask(pid,k){
+  if(!S.tasks) S.tasks={};
+  if(!S.tasks[pid]) S.tasks[pid]={};
+  S.tasks[pid][k] = !S.tasks[pid][k];
+  save(); render();
+}
+const taskCount = p => TASKS.filter(t=>taskDone(p,t)).length;
+/* 打診がまだの物件（期間が決まっていて外部が未確定・未打診） */
+function needsAsking(p){
+  return p.status!=='完了' && p.start && !taskDone(p,TASKS[5]) && extConfirmedIn(p.id).length===0;
+}
+function taskList(p){
+  const n = taskCount(p);
+  return `<div class="card"><div class="row" style="justify-content:space-between;align-items:center">
+      <h2 style="margin:0">業務チェックリスト</h2>
+      <div><b>${n}/${TASKS.length}</b> 完了
+        <span class="bar"><i style="width:${Math.round(n/TASKS.length*100)}%"></i></span></div>
+    </div>
+    ${needsAsking(p)?`<div class="alert warn">まだ外部インスペへ打診していません。日付が届いているならすぐ打診してOKです。
+      <button class="btn sm" onclick="go('msg')">打診文を開く</button></div>`:''}
+    ${TASKS.map(t=>{
+      const done = taskDone(p,t);
+      return `<label class="task ${done?'done':''}" ${t.auto?'title="アプリの状態から自動で判定しています"':''}>
+        <input type="checkbox" ${done?'checked':''} ${t.auto?'disabled':''} onchange="toggleTask('${p.id}','${t.k}')">
+        <span>${t.label}${t.auto?' <span class="badge">自動</span>':''}
+          ${t.hint?`<br><span class="muted">${t.hint}</span>`:''}</span></label>`;
+    }).join('')}
+  </div>`;
+}
+
+/* ---- OFF（休み・不在）---- */
+const offOf = (mid,date) => S.offs.find(o=>o.memberId===mid && o.date===date);
+function setOff(mid, start, end, reason){
+  range(start,end).forEach(function(d){
+    if(offOf(mid,d)) return;
+    S.offs.push({id:uid(), memberId:mid, date:d, reason:reason||'OFF'});
+  });
+  save(); render();
+}
+function clearOff(mid, start, end){
+  const ds = range(start,end);
+  S.offs = S.offs.filter(o=> !(o.memberId===mid && ds.indexOf(o.date)>=0) );
+  save(); render();
+}
+/* OFF日に既に入っているアサインを洗い出す */
+function offConflicts(){
+  return S.assignments.filter(a=>offOf(a.memberId,a.date));
+}
+function dropOffConflicts(){
+  const ids = offConflicts().map(a=>a.id);
+  S.assignments = S.assignments.filter(a=>ids.indexOf(a.id)<0);
+  save(); render();
+}
+function offSummary(){
+  const conf = offConflicts();
+  const head = conf.length
+    ? `<div class="alert err">⚠ OFFと重なっているアサインが${conf.length}件あります：`
+      + conf.map(a=>`${M(a.memberId).name}さん ${fmt(a.date)}（${P(a.propertyId).name}）`).join('、')
+      + ` <button class="btn sm danger" onclick="dropOffConflicts()">まとめて外す</button></div>`
+    : '';
+  if(!S.offs.length) return head + '<div class="muted" style="margin-top:10px">登録されているOFFはありません。</div>';
+  const byM = {};
+  S.offs.slice().sort((a,b)=>a.date<b.date?-1:1).forEach(o=>{ (byM[o.memberId]=byM[o.memberId]||[]).push(o); });
+  return head + Object.keys(byM).map(function(mid){
+    const parts=[]; let cur=null;
+    byM[mid].forEach(function(o){
+      if(cur && cur.reason===o.reason && addDays(cur.end,1)===o.date){ cur.end=o.date; }
+      else { cur={start:o.date,end:o.date,reason:o.reason}; parts.push(cur); }
+    });
+    return `<div class="reqrow"><b style="min-width:70px">${M(mid).name}</b>
+      <span class="chips" style="flex:1;margin:0">${parts.map(b=>
+        `<span class="chip" onclick="clearOff('${mid}','${b.start}','${b.end}')" title="クリックで解除">${b.start===b.end?fmt(b.start):fmt(b.start)+'〜'+fmt(b.end)}　${b.reason} ×</span>`).join('')}</span></div>`;
+  }).join('');
+}
+
+/* ============================================================
+   制約チェック（厳守ルール）
+   ============================================================ */
+function canConfirm(pid, mid, date){
+  const p = P(pid), R = S.rules;
+  if(!range(p.start,p.end).includes(date)) return {ok:false, why:'検査期間外'};
+
+  const off = offOf(mid,date);
+  if(off) return {ok:false, why:`${M(mid).name}さんは${off.reason}（${fmt(date)}）`};
+
+  const dup = S.assignments.find(a=>a.memberId===mid && a.date===date && a.propertyId!==pid && a.status!=='requested');
+  if(dup) return {ok:false, why:`他物件と重複（${P(dup.propertyId).name}）`};
+
+  // 研修中は同行なので人数上限の対象外
+  if(isTrainee(mid) && !S.rules.countTrainees) return {ok:true};
+
+  const day = booked(pid,date);
+  const me  = day.find(a=>a.memberId===mid);
+
+  if(isExt(mid)){
+    const exts = extConfirmedIn(pid);
+    if(!exts.includes(mid) && exts.length >= R.maxExternalPerProperty)
+      return {ok:false, why:`外部インスペは1棟${R.maxExternalPerProperty}名まで（確定済: ${exts.map(i=>M(i).name).join('・')}）`};
+    const extDay = day.filter(a=>isExt(a.memberId) && a.memberId!==mid).length;
+    if(extDay >= R.maxExternalPerDay)
+      return {ok:false, why:`この日は外部が既に${extDay}名（1日${R.maxExternalPerDay}名まで）`};
+  }
+
+  // 人数上限：自社の仮押さえは外して外部を入れられる（＝実運用の「自社の予定を消す」）
+  const cap = R.maxPerDay;
+  if(!me && day.length >= cap){
+    const releasable = isExt(mid) && day.some(a=>a.status==='hold');
+    if(!releasable) return {ok:false, why:`この日は満員（${day.length}/${cap}名）`};
+  }
+  return {ok:true};
+}
+
+function violations(pid){
+  const p=P(pid), R=S.rules, out=[];
+  const as = asgOf(pid).filter(counts);
+  const days = range(p.start,p.end);
+  const cap = R.maxPerDay;
+  const need = needOf(p);
+
+  const orphan = asgOf(pid).filter(a=>!days.includes(a.date));
+  if(orphan.length) out.push({lv:'err', msg:`検査期間外のアサインが${orphan.length}件（${[...new Set(orphan.map(o=>fmt(o.date)))].join('、')}）`, orphan:true});
+
+  const exts = extConfirmedIn(pid);
+  if(exts.length > R.maxExternalPerProperty) out.push({lv:'err', msg:`外部インスペが${exts.length}名 確定（上限${R.maxExternalPerProperty}名）`});
+  if(as.length < need) out.push({lv:'warn', msg:`のべ ${as.length}/${need}名 — あと${need-as.length}名ぶん未確保`});
+  if(as.length > need) out.push({lv:'warn', msg:`のべ ${as.length}/${need}名 — ${as.length-need}名ぶん多く入っています`});
+  if(need > days.length*cap) out.push({lv:'err', msg:`のべ${need}名は${days.length}日×${cap}名＝${days.length*cap}名ぶんに収まりません。期間を延ばすか人数を見直してください`});
+
+  const offNg = asgOf(pid).filter(a=>offOf(a.memberId,a.date));
+  offNg.forEach(a=>out.push({lv:'err', msg:`${fmt(a.date)} ${M(a.memberId).name}さんは${offOf(a.memberId,a.date).reason}です`}));
+
+  days.forEach(d=>{
+    const day = as.filter(a=>a.date===d);
+    const ext = day.filter(a=>isExt(a.memberId)).length;
+    if(ext > R.maxExternalPerDay) out.push({lv:'err', msg:`${fmt(d)} 外部${ext}名（上限${R.maxExternalPerDay}名）`});
+    if(day.length > cap) out.push({lv:'err', msg:`${fmt(d)} 合計${day.length}名（1日${cap}名まで）`});
+  });
+  return out;
+}
+
+/* ============================================================
+   操作
+   ============================================================ */
+/* 管理者がボードのマスを押したとき */
+function toggle(pid, mid, date){
+  const ex = find(pid,mid,date);
+  if(ex){ remove(ex); return; }
+  const c = canConfirm(pid,mid,date);
+  if(!c.ok) return alert('登録できません：' + c.why);
+  add(pid,mid,date, isExt(mid)?'confirmed':'hold');
+}
+function add(pid,mid,date,status){
+  S.assignments.push({id:uid(), propertyId:pid, memberId:mid, date, status});
+  if(status==='confirmed' && isExt(mid)) releaseHolds(pid,date);
+  save(); render();
+}
+function remove(a){ S.assignments = S.assignments.filter(x=>x!==a); save(); render(); }
+
+/* 外部が確定した日は、はみ出た自社の仮押さえを外す（＝Googleカレンダーの自社予定を削除） */
+function releaseHolds(pid,date){
+  const cap = S.rules.maxPerDay;
+  let day = booked(pid,date);
+  while(day.length > cap){
+    const holds = day.filter(a=>a.status==='hold')
+                     .sort((a,b)=> (M(b.memberId).load==='low') - (M(a.memberId).load==='low'));
+    if(!holds.length) break;
+    S.assignments = S.assignments.filter(x=>x!==holds[0]);
+    day = booked(pid,date);
+  }
+}
+
+/* 自社スタッフで仮押さえ。のべ必要人数に達するまで、負担が少ない人から満遍なく入れる */
+function holdAll(pid){
+  const p=P(pid), cap=S.rules.maxPerDay, need=needOf(p);
+  const days = range(p.start,p.end);
+  /* 満遍なく＝①対応少なめの人は後回し ②この棟に入っている日数が少ない人 ③全物件を通した稼働が少ない人 */
+  const workload = mid => S.assignments.filter(a=>a.memberId===mid && a.status!=='requested').length;
+  const inProp   = mid => asgOf(pid).filter(a=>a.memberId===mid).length;
+  let guard = 0;
+  while(totalBooked(pid) < need && guard++ < 200){
+    let placed = false;
+    for(const d of days){
+      if(totalBooked(pid) >= need) break;
+      if(booked(pid,d).length >= cap) continue;
+      const cand = S.members.filter(m=>m.type==='internal' && !find(pid,m.id,d) && canConfirm(pid,m.id,d).ok)
+        .sort((a,b)=> (a.load==='low')-(b.load==='low') || inProp(a.id)-inProp(b.id) || workload(a.id)-workload(b.id));
+      if(!cand.length) continue;
+      S.assignments.push({id:uid(),propertyId:pid,memberId:cand[0].id,date:d,status:'hold'});
+      placed = true;
+    }
+    if(!placed) break;   // これ以上入れられない
+  }
+  save(); render();
+}
+
+/* 申請 → 承認 / 却下 */
+function request(pid,mid,date){
+  const ex = find(pid,mid,date);
+  if(ex){ if(ex.status==='requested') remove(ex); return; }
+  S.assignments.push({id:uid(), propertyId:pid, memberId:mid, date, status:'requested'});
+  save(); render();
+}
+function approve(id){
+  const a = S.assignments.find(x=>x.id===id);
+  const c = canConfirm(a.propertyId, a.memberId, a.date);
+  if(!c.ok) return alert('承認できません：' + c.why);
+  a.status='confirmed';
+  releaseHolds(a.propertyId, a.date);
+  save(); render();
+}
+function approveAllOf(pid,mid){
+  asgOf(pid).filter(a=>a.memberId===mid && a.status==='requested')
+    .sort((a,b)=>a.date<b.date?-1:1)
+    .forEach(a=>{ if(canConfirm(pid,mid,a.date).ok){ a.status='confirmed'; releaseHolds(pid,a.date); } });
+  save(); render();
+}
+function rejectAllOf(pid,mid){
+  S.assignments = S.assignments.filter(a=>!(a.propertyId===pid && a.memberId===mid && a.status==='requested'));
+  save(); render();
+}
+
+/* 工期変更 */
+function changeTerm(pid, ns, ne){
+  if(!ns||!ne||ns>ne) return alert('期間が正しくありません');
+  const p=P(pid), old=`${p.start}〜${p.end}`;
+  const days = range(ns,ne);
+  const affected = asgOf(pid).filter(a=>!days.includes(a.date));
+  p.start=ns; p.end=ne;
+  p.history.push({at:new Date().toISOString().slice(0,16).replace('T',' '), from:old, to:`${ns}〜${ne}`, dropped:affected.length});
+  save(); render();
+  if(affected.length){
+    const names=[...new Set(affected.filter(a=>isExt(a.memberId)).map(a=>M(a.memberId).name))];
+    setTimeout(()=>alert(`工期を変更しました。\n新期間から外れたアサイン ${affected.length}件が「期間外」として残っています。\nチェック結果から一括解除できます。`+(names.length?`\n\n要連絡：${names.map(n=>n+'さん').join('、')}\n→「連絡文」タブに変更連絡の文面があります。`:'')),60);
+  }
+}
+function dropOrphans(pid){
+  const days = range(P(pid).start, P(pid).end);
+  S.assignments = S.assignments.filter(a=> a.propertyId!==pid || days.includes(a.date));
+  save(); render();
+}
+
+/* ============================================================
+   画面：調整ボード
+   ============================================================ */
+function viewBoard(){
+  if(!S.properties.length) return emptyState();
+  const p = curP(), days = range(p.start,p.end), R=S.rules;
+  const cap = R.maxPerDay, need = needOf(p), got = totalBooked(p.id);
+  const ints = S.members.filter(m=>m.type==='internal');
+  const exts = S.members.filter(m=>m.type==='external');
+  const trns = S.members.filter(m=>m.type==='trainee');
+  const cfm = extConfirmedIn(p.id);
+
+  const cell = (m,d) => {
+    const a = find(p.id,m.id,d);
+    const off = offOf(m.id,d);
+    if(a) return `<button class="cell ${a.status}${off?' conflict':''}" onclick="toggle('${p.id}','${m.id}','${d}')" title="${off?off.reason+'と重複しています。':''}${a.status==='requested'?'希望申請中（クリックで取消）':'クリックで解除'}">${off?'⚠':(a.status==='requested'?'希望':'●')}</button>`;
+    if(off) return `<button class="cell off" title="${m.name}さん ${off.reason}" disabled>休</button>`;
+    const c = canConfirm(p.id,m.id,d);
+    if(!c.ok) return `<button class="cell ng" title="${c.why}" disabled>×</button>`;
+    return `<button class="cell" onclick="toggle('${p.id}','${m.id}','${d}')">＋</button>`;
+  };
+  const capRow = days.map(d=>{
+    const day = booked(p.id,d);
+    const ext = day.filter(a=>isExt(a.memberId)).length;
+    const cls = day.length>cap?'over':day.length===0?'short':'ok';
+    return `<td><span class="cap ${cls}">${day.length}名</span><br><span class="muted" style="font-size:10px">${ext?'外'+ext:'—'}</span></td>`;
+  }).join('');
+  const vio = violations(p.id);
+
+  return `
+  ${backBar()}
+  <div class="card">
+    <div class="row" style="justify-content:space-between">
+      <div>
+        <h2 style="margin:0">${p.name} <span class="badge st-${p.status}">${p.status}</span></h2>
+        <div class="muted"><span class="mono">${pcode(p)}</span> ／ ${p.address||'住所未定'} ／ ${p.units||'規模未入力'}</div>
+        ${p.note?`<div class="muted" style="color:var(--ext)">※ ${p.note}</div>`:''}
+      </div>
+      <div class="row">
+        <div><label>検査期間（変更するとここが工期変更になります）</label>
+          <input type="date" id="ts" value="${p.start}"> 〜 <input type="date" id="te" value="${p.end}">
+          <button class="btn sm" onclick="changeTerm('${p.id}',ts.value,te.value)">工期変更</button>
+        </div>
+        <div><label>部屋数</label><input type="number" min="0" style="width:70px" placeholder="12" value="${p.rooms||''}"
+          onchange="var v=+this.value; P('${p.id}').rooms=v||null; if(v) P('${p.id}').needed=neededFromRooms(v); save(); render()"></div>
+        <div><label>必要のべ人数</label><input type="number" min="1" max="20" style="width:70px" value="${need}" onchange="P('${p.id}').needed=+this.value;save();render()"></div>
+      </div>
+    </div>
+    <div class="alert ${got===need?'ok':'warn'}" style="margin-top:10px">
+      のべ <b>${got}／${need}名</b> 確保${got<need?`（あと${need-got}名）`:got>need?`（${got-need}名 多い）`:' — 完了'}
+      　<span class="muted">1日あたり最大${cap}名（アカウントの関係）／${p.rooms?`部屋数${p.rooms} ÷ ${R.roomsPerPerson}部屋 = ${neededFromRooms(p.rooms)}名`:'3部屋＋共用部で1人ベース'}</span>
+    </div>
+    <div class="row" style="margin-top:10px"><div><label>物件を切り替え（全${S.properties.length}棟）</label>${propSelect()}</div></div>
+  </div>
+
+  <div class="card">
+    <div class="row" style="justify-content:space-between;margin-bottom:10px">
+      <h2 style="margin:0">アサイン表</h2>
+      <div class="row" style="gap:6px">
+        <button class="btn sm" onclick="holdAll('${p.id}')">自社スタッフで仮押さえ（のべ${need}名ぶん）</button>
+        <button class="btn sm danger" onclick="if(confirm('この物件のアサインを全消去しますか？')){S.assignments=S.assignments.filter(a=>a.propertyId!=='${p.id}');save();render()}">全消去</button>
+      </div>
+    </div>
+    <div class="scroll">
+    <table class="grid">
+      <thead><tr><th class="name" style="width:150px">メンバー</th>
+        ${days.map(d=>{const w=s2d(d).getDay();return `<th class="${w===0?'we':w===6?'sa':''}" style="min-width:56px"><div class="dnum">${s2d(d).getDate()}</div>${WD[w]}</th>`}).join('')}
+      </tr></thead>
+      <tbody>
+        <tr><td class="grp" colspan="${days.length+1}">自社スタッフ（仮押さえ）</td></tr>
+        ${ints.map(m=>`<tr><td class="name">${m.name}${m.load==='low'?' <span class="muted">対応少なめ</span>':''}</td>${days.map(d=>`<td>${cell(m,d)}</td>`).join('')}</tr>`).join('')}
+        <tr><td class="grp" colspan="${days.length+1}">外部インスペ（1棟 ${R.maxExternalPerProperty}名まで／1日 ${R.maxExternalPerDay}名まで）${cfm.length?` ー 確定: ${cfm.map(i=>M(i).name+'さん').join('、')}`:''}</td></tr>
+        ${exts.map(m=>`<tr><td class="name">${m.name}さん</td>${days.map(d=>`<td>${cell(m,d)}</td>`).join('')}</tr>`).join('')}
+        ${trns.length?`<tr><td class="grp" colspan="${days.length+1}">研修中（同行。${S.rules.countTrainees?'人数に数える':'1日2名の人数には数えない'}）</td></tr>`:''}
+        ${trns.map(m=>`<tr><td class="name">${m.name}<span class="muted"> 研修中</span></td>${days.map(d=>`<td>${cell(m,d)}</td>`).join('')}</tr>`).join('')}
+        <tr><td class="name" style="font-weight:600">確保状況</td>${capRow}</tr>
+      </tbody>
+    </table>
+    </div>
+    <div class="legend">
+      <span><i style="background:var(--int-soft);border:1px solid var(--int)"></i>自社（仮押さえ）</span>
+      <span><i style="background:var(--req-soft);border:1px solid var(--req)"></i>希望申請（未承認）</span>
+      <span><i style="background:var(--ext-soft);border:1px solid var(--ext)"></i>外部（確定）</span>
+      <span><i style="background:#f1f1f1"></i>ルール上 登録不可（マウスを乗せると理由）</span>
+    </div>
+  </div>
+
+  ${taskList(p)}
+
+  <div class="card">
+    <h2>チェック結果</h2>
+    ${vio.length===0 ? `<div class="alert ok">✓ ルール違反・未確保はありません。</div>` :
+      vio.map(v=>`<div class="alert ${v.lv==='err'?'err':'warn'}">${v.lv==='err'?'⚠ ':'・'}${v.msg}
+        ${v.orphan?` <button class="btn sm danger" onclick="dropOrphans('${p.id}')">期間外を一括解除</button>`:''}</div>`).join('')}
+    ${p.history.length?`<h3>工期変更履歴</h3>${p.history.map(h=>`<div class="muted">${h.at}　${h.from} → ${h.to}（期間外になったアサイン ${h.dropped}件）</div>`).join('')}`:''}
+  </div>`;
+}
+
+/* ============================================================
+   画面：申請の承認
+   ============================================================ */
+function pendingList(){
+  const out=[];
+  S.properties.forEach(p=>{
+    const reqs = asgOf(p.id).filter(a=>a.status==='requested');
+    if(!reqs.length) return;
+    const byM = {};
+    reqs.forEach(a=>{ (byM[a.memberId]=byM[a.memberId]||[]).push(a); });
+    out.push({p, byM});
+  });
+  return out;
+}
+function viewApprove(){
+  const list = pendingList();
+  if(!list.length) return backBar()+`<div class="card"><h2>申請の承認</h2><div class="alert ok">承認待ちの申請はありません。</div>
+    <div class="muted">「予約画面（インスペさん）」タブから希望を出すと、ここに並びます。</div></div>`;
+
+  return backBar() + list.map(({p,byM})=>{
+    const cfm = extConfirmedIn(p.id), R=S.rules;
+    const slots = R.maxExternalPerProperty - cfm.length;
+    return `<div class="card">
+      <h2>${p.name} <span class="badge st-${p.status}">${p.status}</span></h2>
+      <div class="muted">${fmtLong(p.start)}〜${fmtLong(p.end)}　のべ ${totalBooked(p.id)}/${needOf(p)}名 確保済み</div>
+      ${cfm.length?`<div class="alert ok">確定済み：${cfm.map(i=>M(i).name+'さん').join('、')}（残り枠 ${slots}名）</div>`
+                  :`<div class="alert info">外部インスペの枠は ${R.maxExternalPerProperty}名です。誰にお願いするか選んでください。</div>`}
+      ${Object.entries(byM).map(([mid,as])=>{
+        const m=M(mid), ds=as.map(a=>a.date).sort();
+        const blocked = !cfm.includes(mid) && slots<=0;
+        return `<div class="reqrow">
+          <b style="min-width:90px">${m.name}さん</b>
+          <span class="muted">希望 ${ds.length}日</span>
+          <span style="flex:1">${as.sort((a,b)=>a.date<b.date?-1:1).map(a=>{
+              const c=canConfirm(p.id,mid,a.date);
+              return c.ok
+                ? `<button class="btn sm ok" style="margin:2px" onclick="approve('${a.id}')">${fmt(a.date)} を承認</button>`
+                : `<button class="btn sm" style="margin:2px" disabled title="${c.why}">${fmt(a.date)}（${c.why}）</button>`;
+            }).join('')}</span>
+          <button class="btn sm pri" ${blocked?'disabled':''} onclick="approveAllOf('${p.id}','${mid}')">全て承認</button>
+          <button class="btn sm danger" onclick="rejectAllOf('${p.id}','${mid}')">見送り</button>
+        </div>`;
+      }).join('')}
+    </div>`;
+  }).join('');
+}
+
+/* ============================================================
+   画面：物件
+   ============================================================ */
+function viewProps(){
+  const R=S.rules;
+  return `
+  <div class="card">
+    <h2>新規物件</h2>
+    <div class="row">
+      <div><label>物件名</label><input id="np" placeholder="（仮）〇〇レジデンス" style="width:220px"></div>
+      <div><label>住所</label><input id="na" placeholder="東京都…" style="width:220px"></div>
+      <div><label>検査開始</label><input type="date" id="ns" value="${d2s(new Date())}"></div>
+      <div><label>検査終了</label><input type="date" id="ne" value="${addDays(d2s(new Date()),2)}"></div>
+      <div><label>部屋数</label><input type="number" id="nr" placeholder="12" style="width:70px"></div>
+      <button class="btn pri" onclick="addProp()">追加</button>
+    </div>
+    <div class="muted" style="margin-top:8px">※ 住所だけ先行して来た場合は、物件名に住所を入れて「図面待ち」で登録 → 図面到着後に期間・部屋数を更新。<br>
+      ※ 部屋数を入れると ${R.roomsPerPerson}部屋＋共用部で1人 の計算で必要のべ人数が入ります（未入力なら${R.defaultNeeded}名）。</div>
+  </div>
+  <div class="card">
+    <div class="row" style="justify-content:space-between">
+      <h2 style="margin:0">物件一覧（${S.properties.length}棟）</h2>
+      ${PAPAMAHALO.length?`<button class="btn sm" onclick="if(confirm(CLIENT+'様の既存スケジュール（全'+PAPAMAHALO.length+'棟）を読み込みます。登録済みのものは飛ばします。')){importPapamahalo()}">${CLIENT} 実データを読み込む</button>`:''}
+    </div>
+    <div class="plist" style="margin-top:12px">
+    ${(function(){ let lastM=''; return S.properties.slice().sort((a,b)=>a.start<b.start?-1:1).map(p=>{
+      const as=asgOf(p.id), cfm=extConfirmedIn(p.id);
+      const req=as.filter(a=>a.status==='requested').length;
+      const days=range(p.start,p.end);
+      const got=totalBooked(p.id), need=needOf(p), tn=taskCount(p);
+      const mk=p.start.slice(0,7), hdr = mk!==lastM ? `<div class="grp" style="border-radius:6px">${+mk.slice(0,4)}年${+mk.slice(5,7)}月</div>` : '';
+      lastM=mk;
+      return hdr+`<div class="pitem ${p.id===S.ui.curProp?'on':''}" onclick="S.ui.curProp='${p.id}';save();go('board')">
+        <div>
+          <span class="mono">${pcode(p)}</span> <b>${p.name}</b> <span class="badge st-${p.status}">${p.status}</span> ${req?`<span class="badge" style="background:var(--req-soft);color:var(--req)">申請${req}件</span>`:''}${needsAsking(p)?` <span class="badge" style="background:#fff3d6;color:#8a6100">打診まだ</span>`:''}
+          <div class="muted">${fmtLong(p.start)}〜${fmtLong(p.end)}（${days.length}日）／ ${p.address||'住所未定'}</div>
+          <div class="muted">のべ ${got}/${need}名 ／ 外部: ${cfm.length?cfm.map(i=>M(i).name+'さん').join('、'):'未定'}
+            ／ 業務 ${tn}/${TASKS.length}<span class="minibar"><i style="width:${Math.round(tn/TASKS.length*100)}%"></i></span></div>
+          ${p.note?`<div class="muted" style="color:var(--ext)">※ ${p.note}</div>`:''}
+        </div>
+        <div class="row" style="gap:6px" onclick="event.stopPropagation()">
+          <select onchange="P('${p.id}').status=this.value;save();render()">
+            ${['図面待ち','調整中','確定','完了'].map(s=>`<option ${s===p.status?'selected':''}>${s}</option>`).join('')}
+          </select>
+          <button class="btn sm danger" onclick="if(confirm('削除しますか？')){S.properties=S.properties.filter(x=>x.id!=='${p.id}');S.assignments=S.assignments.filter(a=>a.propertyId!=='${p.id}');save();render()}">削除</button>
+        </div>
+      </div>`;}).join(''); })()}
+    </div>
+  </div>`;
+}
+function addProp(){
+  if(!np.value) return alert('物件名を入力してください');
+  const rooms = +nr.value || null;
+  S.properties.push({id:uid(), name:np.value, address:na.value, code:autoCode(ns.value,ne.value),
+    status:'図面待ち', start:ns.value, end:ne.value, rooms:rooms,
+    needed: rooms?neededFromRooms(rooms):S.rules.defaultNeeded, units:'', note:'', history:[]});
+  save(); render();
+}
+
+/* ============================================================
+   画面：予約（インスペさん視点）
+   ============================================================ */
+function viewBook(){
+  const exts = S.members.filter(m=>m.type==='external');
+  if(!exts.length) return backBar()+`<div class="card"><h2>予約画面プレビュー</h2>
+    <div class="alert warn">外部インスペのメンバーが登録されていません。「メンバー / ルール」タブで追加してください。</div></div>`;
+  if(!M(S.ui.bookAs) || !isExt(S.ui.bookAs)){ S.ui.bookAs = exts[0].id; }
+  const me = M(S.ui.bookAs), R=S.rules;
+  const open = S.properties.filter(p=>p.status==='調整中'||p.status==='図面待ち');
+  return `
+  <div class="card">
+    <h2>予約画面プレビュー</h2>
+    <div class="muted">外部インスペさんに送るリンクの画面イメージ。ここで出すのは<b>希望</b>で、確定はこちらの承認後です。</div>
+    <div class="row" style="margin-top:10px"><div><label>誰として見る</label>
+      <select onchange="S.ui.bookAs=this.value;save();render()">
+        ${S.members.filter(m=>m.type==='external').map(m=>`<option value="${m.id}" ${m.id===me.id?'selected':''}>${m.name}さん</option>`).join('')}
+      </select></div></div>
+  </div>
+  ${open.map(p=>{
+    const days=range(p.start,p.end);
+    const cfm=extConfirmedIn(p.id);
+    const mine=asgOf(p.id).filter(a=>a.memberId===me.id);
+    const myReq=mine.filter(a=>a.status==='requested').map(a=>a.date).sort();
+    const myCfm=mine.filter(a=>a.status==='confirmed').map(a=>a.date).sort();
+    const closed = !cfm.includes(me.id) && cfm.length>=R.maxExternalPerProperty;
+    return `<div class="card">
+      <h2>${p.name}</h2>
+      <div class="kv"><b>期間</b><span>${fmtLong(p.start)}〜${fmtLong(p.end)}（${days.length}日間）</span></div>
+      <div class="kv"><b>場所</b><span>${p.address||'（追ってご連絡）'}</span></div>
+      <div class="kv"><b>規模</b><span>${p.units||'—'}</span></div>
+      ${myCfm.length?`<div class="alert ok">確定：${myCfm.map(fmt).join('、')}（計${myCfm.length}日）Googleカレンダーの招待をご確認ください。</div>`:''}
+      ${closed?`<div class="alert warn">この物件は ${cfm.map(i=>M(i).name+'さん').join('、')} で確定したため、受付を終了しています。</div>`:`
+      <h3>対応できる日をすべて選んでください（1日だけでもOK・飛び飛びOK）</h3>
+      <div class="chips">
+      ${days.map(d=>{
+        const a = mine.find(x=>x.date===d);
+        if(a && a.status==='confirmed') return `<span class="chip cfm">${fmt(d)} 確定</span>`;
+        if(a) return `<span class="chip req" onclick="request('${p.id}','${me.id}','${d}')">${fmt(d)} ✓ 希望済</span>`;
+        const c = canConfirm(p.id, me.id, d);
+        if(!c.ok) return `<span class="chip full" title="${c.why}">${fmt(d)}</span>`;
+        return `<span class="chip" onclick="request('${p.id}','${me.id}','${d}')">${fmt(d)}</span>`;
+      }).join('')}
+      </div>
+      ${myReq.length?`<div class="alert info" style="margin-top:10px">希望を送信しました：${myReq.map(fmt).join('、')}<br>
+        <span class="muted">確定しましたら改めてご連絡します。取消は日付をもう一度タップ。</span></div>`
+        :`<div class="muted" style="margin-top:8px">日付をタップすると希望として送信されます。</div>`}
+      `}
+    </div>`}).join('') || '<div class="card">受付中の物件はありません。</div>'}`;
+}
+
+/* ============================================================
+   画面：連絡文・カレンダー
+   ============================================================ */
+function blocks(pid,mid){
+  const ds = asgOf(pid).filter(a=>a.memberId===mid && a.status==='confirmed').map(a=>a.date).sort();
+  const out=[]; let cur=null;
+  ds.forEach(d=>{ if(cur && addDays(cur.end,1)===d){cur.end=d;} else {cur={start:d,end:d}; out.push(cur);} });
+  return out;
+}
+const blkStr = b => b.start===b.end ? fmtLong(b.start) : `${fmtLong(b.start)}〜${fmtLong(b.end)}`;
+function gcalUrl(p, m, b){
+  const t = evTitle(p,m);
+  const dates = `${b.start.replace(/-/g,'')}/${addDays(b.end,1).replace(/-/g,'')}`;
+  const det = `物件: ${p.name}\n住所: ${p.address||''}\n規模: ${p.units||''}\n主催: ${ORGANIZER}`;
+  return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(t)}&dates=${dates}&details=${encodeURIComponent(det)}&location=${encodeURIComponent(p.address||'')}&add=${encodeURIComponent(m.email)}`;
+}
+function viewMsg(){
+  if(!S.properties.length) return emptyState();
+  const p = curP(), R=S.rules;
+  const days = range(p.start,p.end), cap=R.maxPerDay;
+  const cfm = extConfirmedIn(p.id);
+  const openDays = days.filter(d=>{
+    const day=booked(p.id,d);
+    return day.filter(a=>isExt(a.memberId)).length < R.maxExternalPerDay && day.filter(a=>a.status==='confirmed').length < cap;
+  });
+
+  const askMsg =
+`お世話になっております。${SENDER}です。
+下記の内覧会でご対応いただける日はありますでしょうか。
+
+■物件：${p.name}
+■住所：${p.address||'（追ってご連絡します）'}
+■規模：${p.units||'—'}
+■検査期間：${fmtLong(p.start)}〜${fmtLong(p.end)}（${days.length}日間）
+■ご対応をお願いしたい日：
+${openDays.map(d=>'　・'+fmtLong(d)).join('\n')||'　（現在空きがありません）'}
+
+下記より、対応できる日をお選びください（1日だけ・飛び飛びでも大丈夫です）。
+▼予約ページ
+（ここに予約リンクが入ります）
+
+いただいたご希望をもとに確定し、改めてご連絡いたします。`;
+
+  const cfmMsg = cfm.length ?
+cfm.map(id=>`【${M(id).name}さん宛】
+お世話になっております。${SENDER}です。
+下記の日程で確定いたしました。よろしくお願いいたします。
+
+■物件：${p.name}
+■住所：${p.address||'（追ってご連絡します）'}
+■日程：${blocks(p.id,id).map(blkStr).join('、')}
+
+Googleカレンダーの招待をお送りしております。ご承認をお願いいたします。`).join('\n\n————————\n\n')
+: '（確定した外部インスペがいません）';
+
+  const changeMsg = cfm.length ?
+`お世話になっております。${SENDER}です。
+先日ご調整いただいた下記物件について、先方より工期変更の連絡がありました。
+
+■物件：${p.name}
+■新しい検査期間：${fmtLong(p.start)}〜${fmtLong(p.end)}
+■現在お願いしている日：
+${cfm.map(id=>`　${M(id).name}さん：${blocks(p.id,id).map(blkStr).join('、')||'（要再調整）'}`).join('\n')}
+
+新しい日程でご対応可能でしょうか。
+難しい場合は無理せずお知らせください。予定は取り下げます。
+▼予約ページ（新しい期間で選び直せます）
+（ここに予約リンクが入ります）` : '（確定した外部インスペがいません）';
+
+  return `
+  ${backBar()}
+  <div class="card">
+    <div class="row" style="justify-content:space-between;align-items:center">
+      <h2 style="margin:0"><span class="mono">${pcode(p)}</span>　${p.name}</h2>
+      ${propSelect()}
+    </div>
+  </div>
+  <div class="two">
+    <div class="card"><h2>① 打診（LINE）</h2>
+      <textarea id="m1">${askMsg}</textarea>
+      <button class="btn" onclick="cp('m1',this)">コピー</button></div>
+    <div class="card"><h2>② 確定連絡（LINE）</h2>
+      <textarea id="m2">${cfmMsg}</textarea>
+      <button class="btn" onclick="cp('m2',this)">コピー</button></div>
+  </div>
+  <div class="card"><h2>③ 工期変更の連絡（LINE）</h2>
+    <textarea id="m3">${changeMsg}</textarea>
+    <button class="btn" onclick="cp('m3',this)">コピー</button></div>
+
+  <div class="card">
+    <h2>④ Googleカレンダー登録</h2>
+    <div class="muted">現状は暫定実装です。主催アカウント <span class="mono">${ORGANIZER}</span> でログインした状態でボタンを押すと、タイトル・日程・ゲスト招待が入力済みの作成画面が開きます。</div>
+    ${cfm.length===0?`<div class="alert warn" style="margin-top:10px">確定した外部インスペがまだいません。</div>`:
+      cfm.map(id=>{const m=M(id);return `<h3>${m.name}さん <span class="mono">${m.email}</span></h3>` +
+        blocks(p.id,id).map(b=>`<div class="row" style="align-items:center;gap:10px;padding:4px 0">
+          <span style="width:230px">${blkStr(b)}</span>
+          <span class="mono">${evTitle(p,m)}</span>
+          <a class="btn sm" target="_blank" href="${gcalUrl(p,m,b)}">カレンダーに追加</a>
+        </div>`).join('')}).join('')}
+    <div style="margin-top:12px"><button class="btn" onclick="downloadIcs('${p.id}')">.ics を一括ダウンロード</button></div>
+  </div>`;
+}
+function cp(id,btn){ navigator.clipboard.writeText(document.getElementById(id).value); btn.textContent='コピーしました'; }
+function downloadIcs(pid){
+  const p=P(pid); const out=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//LTS//sched//JA'];
+  extConfirmedIn(pid).forEach(id=>{
+    const m=M(id);
+    blocks(pid,id).forEach(b=>{
+      out.push('BEGIN:VEVENT',`UID:${uid()}@lts`,
+        `DTSTART;VALUE=DATE:${b.start.replace(/-/g,'')}`,
+        `DTEND;VALUE=DATE:${addDays(b.end,1).replace(/-/g,'')}`,
+        `SUMMARY:${evTitle(p,m)}`,
+        `LOCATION:${p.address||''}`,
+        `ORGANIZER;CN=${SENDER}:mailto:${ORGANIZER}`,
+        `ATTENDEE;CN=${m.name};RSVP=TRUE:mailto:${m.email}`,'END:VEVENT');
+    });
+  });
+  out.push('END:VCALENDAR');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([out.join('\r\n')],{type:'text/calendar'}));
+  a.download=`${p.name}.ics`; a.click();
+}
+
+/* ============================================================
+   画面：メンバー / ルール
+   ============================================================ */
+function viewMembers(){
+  const R=S.rules;
+  const num=(k,l)=>`<div><label>${l}</label><input type="number" value="${R[k]}" onchange="S.rules.${k}=+this.value;save();render()" style="width:70px"> 名</div>`;
+  return `
+  <div class="card"><h2>ルール（厳守）</h2>
+    <div class="row">
+      ${num('maxPerDay','1日あたりの人数上限（自社＋外部）')}
+      ${num('maxExternalPerProperty','外部インスペ：1棟あたり上限')}
+      ${num('maxExternalPerDay','外部インスペ：1日あたり上限')}
+      ${num('defaultNeeded','1棟あたりの既定 必要のべ人数')}
+      ${num('roomsPerPerson','1人あたりの担当部屋数')}
+    </div>
+    <div class="row" style="margin-top:10px">
+      <label class="task" style="border:none;padding:0"><input type="checkbox" ${S.rules.countTrainees?'checked':''}
+        onchange="S.rules.countTrainees=this.checked;save();render()">
+        <span>研修中スタッフも1日${S.rules.maxPerDay}名の人数に数える</span></label>
+    </div>
+    <div class="muted">1日${S.rules.maxPerDay}名までなのは「アカウントの関係」。3日で のべ${S.rules.defaultNeeded}名なら 1日目1人・2日目1人・3日目2人 のように割り振ります。</div>
+    <h3>Googleカレンダーの予定タイトル</h3>
+    <div class="row">
+      <div style="flex:1"><input value="${S.rules.titleTemplate}" onchange="S.rules.titleTemplate=this.value;save();render()" style="width:100%;max-width:520px"></div>
+    </div>
+    <div class="muted">使える差し込み：<span class="mono">{名前} {元請け} {コード} {住所} {物件名}</span>
+      例）<span class="mono">${sampleTitle()}</span></div>
+  </div>
+  <div class="card"><h2>メンバー</h2>
+    <div class="scroll"><table class="grid"><thead><tr><th class="name">氏名</th><th>区分</th><th>稼働</th><th class="name">メール</th><th></th></tr></thead><tbody>
+    ${S.members.map(m=>`<tr>
+      <td class="name">${m.name}</td>
+      <td><span class="badge">${m.type==='internal'?'自社':m.type==='trainee'?'研修中':'外部'}</span></td>
+      <td>${m.type==='internal'?`<select onchange="M('${m.id}').load=this.value;save()"><option value="normal" ${m.load==='normal'?'selected':''}>通常</option><option value="low" ${m.load==='low'?'selected':''}>少なめ</option></select>`:'—'}</td>
+      <td class="name"><input value="${m.email||''}" onchange="M('${m.id}').email=this.value;save()" style="width:230px"></td>
+      <td><button class="btn sm danger" onclick="if(confirm('削除？')){S.members=S.members.filter(x=>x.id!=='${m.id}');S.assignments=S.assignments.filter(a=>a.memberId!=='${m.id}');save();render()}">削除</button></td>
+    </tr>`).join('')}
+    </tbody></table></div>
+    <h3>追加</h3>
+    <div class="row">
+      <div><label>氏名</label><input id="mn" style="width:120px"></div>
+      <div><label>区分</label><select id="mt"><option value="internal">自社</option><option value="external">外部</option><option value="trainee">研修中</option></select></div>
+      <div><label>メール</label><input id="me2" style="width:220px"></div>
+      <button class="btn pri" onclick="if(mn.value){S.members.push({id:uid(),name:mn.value,type:mt.value,load:'normal',email:me2.value});save();render()}">追加</button>
+    </div>
+  </div>
+  <div class="card"><h2>OFF（休み・不在）</h2>
+    <div class="muted">OFFに登録した日は、その人のマスが「休」になり予定を入れられなくなります。<br>
+      ※サーバー版では各自のGoogleカレンダーから「休」「OFF」「有休」などの予定を自動で読み込む予定です。いまは手入力です。</div>
+    <div class="row" style="margin-top:10px">
+      <div><label>誰</label><select id="ofm">${S.members.filter(m=>m.type==='internal').map(m=>`<option value="${m.id}">${m.name}</option>`).join('')}</select></div>
+      <div><label>開始</label><input type="date" id="ofs" value="${d2s(new Date())}"></div>
+      <div><label>終了</label><input type="date" id="ofe" value="${d2s(new Date())}"></div>
+      <div><label>種別</label><select id="ofr"><option>OFF</option><option>有休</option><option>研修</option><option>他案件</option><option>直行直帰</option></select></div>
+      <button class="btn pri" onclick="setOff(ofm.value,ofs.value,ofe.value,ofr.value)">OFFにする</button>
+      <button class="btn" onclick="clearOff(ofm.value,ofs.value,ofe.value)">OFFを解除</button>
+    </div>
+    ${offSummary()}
+  </div>
+  <div class="card"><h2>データ</h2>
+    <div class="alert warn">データはこの端末のブラウザの中だけに保存されています。サーバー版になるまでは、
+      ときどきバックアップを取っておいてください。（履歴の削除やブラウザの設定変更で消えることがあります）</div>
+    <div class="row" style="gap:8px">
+      <button class="btn pri" onclick="backup()">バックアップを保存</button>
+      <label class="btn" style="margin:0">ファイルから復元
+        <input type="file" accept="application/json,.json" style="display:none" onchange="restore(this)"></label>
+      ${PAPAMAHALO.length?`<button class="btn" onclick="if(confirm(CLIENT+'様の既存スケジュール（全'+PAPAMAHALO.length+'棟）を読み込みます。登録済みのものは飛ばします。')){importPapamahalo()}">${CLIENT} 実データを読み込む</button>`:''}
+      <button class="btn danger" onclick="if(confirm('全データを初期化しますか？')){localStorage.removeItem('pm_sched_v3');location.reload()}">初期化</button>
+    </div>
+  </div>
+  <div class="card"><h2>オフライン利用</h2>
+    <div class="muted">一度開いておけば、Wi-Fiが無い場所でもそのまま使えます。<br>
+      ・<b>iPhone / iPad</b>：Safariで開いて 共有ボタン →「ホーム画面に追加」<br>
+      ・<b>Android</b>：Chromeのメニュー →「アプリをインストール」<br>
+      ・<b>PC</b>：アドレスバー右側のインストールアイコン、または上の「アプリとして追加」ボタン<br>
+      追加するとアイコンから起動でき、ブラウザのバーが出ない画面になります。</div>
+  </div>`;
+}
+
+/* ============================================================
+   ルーティング
+   ============================================================ */
+const TABS = {board:viewBoard, approve:viewApprove, props:viewProps, book:viewBook, msg:viewMsg, members:viewMembers};
+const TAB_NAME = {board:'調整ボード', approve:'申請の承認', props:'物件一覧', book:'予約画面', msg:'連絡文・カレンダー', members:'メンバー / ルール'};
+let TAB='board', HIST=[];
+function go(t){ if(t!==TAB){ HIST.push(TAB); if(HIST.length>20) HIST.shift(); } TAB=t; render(); }
+function back(){ TAB = HIST.pop() || 'props'; render(); }
+/* 直前の画面へ戻るリンク（物件を選んで入ってきたときの「戻る」） */
+function backBar(){
+  if(!HIST.length) return '';
+  const prev = HIST[HIST.length-1];
+  return `<button class="back" onclick="back()">← ${TAB_NAME[prev]}に戻る</button>`;
+}
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>go(b.dataset.tab));
+function render(){
+  Object.keys(TABS).forEach(t=>{ document.getElementById('tab-'+t).hidden = t!==TAB; });
+  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on', b.dataset.tab===TAB));
+  document.getElementById('appTitle').textContent = (D.clientName? D.clientName+' ':'')+'内覧会 スケジュール調整';
+  document.getElementById('ruleTag').textContent = `1日${S.rules.maxPerDay}名 / 外部 1棟${S.rules.maxExternalPerProperty}名・1日${S.rules.maxExternalPerDay}名`;
+  const n = S.assignments.filter(a=>a.status==='requested').length;
+  const el = document.getElementById('nReq'); el.textContent = n||''; el.style.display = n?'':'none';
+  document.getElementById('tab-'+TAB).innerHTML = TABS[TAB]();
+  showNet();
+}
+
+/* 初回起動時は data.js の既存スケジュールを読み込む */
+if(FRESH){
+  const today = d2s(new Date());
+  PAPAMAHALO.forEach(function(r){
+    const e = expand(r, today);
+    S.properties.push(e.prop);
+    e.asg.forEach(function(a){ S.assignments.push(a); });
+  });
+  save();
+}
+/* ============================================================
+   オフライン対応（サービスワーカー）とアプリ追加
+   ============================================================ */
+function showNet(){
+  const el = document.getElementById('netTag');
+  const on = navigator.onLine;
+  el.textContent = on ? 'オンライン' : 'オフラインで動作中';
+  el.style.background = on ? '#374151' : '#7c2d12';
+}
+window.addEventListener('online', showNet);
+window.addEventListener('offline', showNet);
+if('serviceWorker' in navigator && location.protocol.indexOf('http')===0){
+  window.addEventListener('load', function(){
+    navigator.serviceWorker.register('sw.js').catch(function(e){ console.warn('SW登録に失敗', e); });
+  });
+}
+let deferredPrompt = null;
+window.addEventListener('beforeinstallprompt', function(e){
+  e.preventDefault(); deferredPrompt = e;
+  document.getElementById('installBtn').hidden = false;
+});
+function doInstall(){
+  if(!deferredPrompt) return;
+  deferredPrompt.prompt();
+  deferredPrompt.userChoice.then(function(){ deferredPrompt=null; document.getElementById('installBtn').hidden=true; });
+}
+window.addEventListener('appinstalled', function(){ document.getElementById('installBtn').hidden = true; });
+
+/* ---- バックアップ / 復元（データはこの端末の中だけにあります）---- */
+function backup(){
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([JSON.stringify(S,null,2)],{type:'application/json'}));
+  a.download='内覧会スケジュール_backup_'+d2s(new Date())+'.json'; a.click();
+}
+function restore(input){
+  const f=input.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=function(){
+    try{
+      const d=JSON.parse(r.result);
+      if(!d.properties||!d.members) throw new Error('形式が違います');
+      if(!confirm('現在のデータを、選んだファイルの内容で置き換えます。よろしいですか？')) return;
+      S=d; S.rules={...RULES_DEFAULT,...S.rules};
+      if(!S.offs) S.offs=[]; if(!S.tasks) S.tasks={};
+      save(); render(); alert('復元しました。');
+    }catch(e){ alert('読み込めませんでした：'+e.message); }
+  };
+  r.readAsText(f);
+}
+
+if(!P(S.ui.curProp) && S.properties.length){
+  const up = S.properties.slice().sort((a,b)=>a.start<b.start?-1:1).filter(p=>p.status!=='完了');
+  S.ui.curProp = (up[0]||S.properties[0]).id;
+}
+render();
+</script>
+</body>
+</html>
