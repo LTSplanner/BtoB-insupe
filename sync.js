@@ -69,6 +69,7 @@ async function start() {
     logout: () => api.signOut(auth),
     addAdmin: (mail) => addAdmin(api, mail),
     removeAdmin: (mail) => removeAdmin(api, mail),
+    claim: () => claim(api),
     upload: () => upload(api)
   };
 
@@ -91,6 +92,7 @@ async function start() {
       status('このアカウントには権限がありません', u.email);
       return;
     }
+    if (!state.admins.length) { status('最初の管理者の登録待ち'); }
     state.on = true;
     watch(api);
     status(navigator.onLine ? '同期中' : 'オフライン（あとで同期）');
@@ -234,6 +236,18 @@ function flush(api) {
 /* ============================================================
    権限の管理（許可リスト）
    ============================================================ */
+/* 立ち上げ時：最初の1人を管理者として登録する */
+async function claim(api) {
+  if (!state.user) return;
+  if (!confirm(state.user.email + ' を最初の管理者として登録します。\nこのあと、ほかの人はここから追加できます。よろしいですか？')) return;
+  try {
+    await api.setDoc(api.doc(api.db, 'config', 'admins'), { emails: [state.user.email] });
+    state.admins = [state.user.email];
+    status('同期中');
+    alert('登録しました。');
+  } catch (e) { status('登録できません', e.message); }
+}
+
 async function addAdmin(api, mail) {
   mail = (mail || '').trim().toLowerCase();
   if (!mail) return;
@@ -282,6 +296,19 @@ function renderPanel() {
   }
 
   const me = state.user.email;
+
+  if (!state.admins.length) {
+    box.innerHTML = `<div class="card"><h2>データの共有</h2>
+      <div class="alert warn">まだ管理者が登録されていません。<b>最初の1人</b>を登録してください。</div>
+      <div class="muted" style="margin-bottom:10px">ログイン中：<b>${esc(state.user.name)}</b>　<span class="mono">${esc(me)}</span></div>
+      <div class="row" style="gap:8px">
+        <button class="btn pri" onclick="SYNC.claim()">このアカウントを最初の管理者にする</button>
+        <button class="btn" onclick="SYNC.logout()">別のアカウントでログインし直す</button>
+      </div>
+      ${state.err ? `<div class="alert err" style="margin-top:10px">${esc(state.err)}</div>` : ''}</div>`;
+    return;
+  }
+
   box.innerHTML = `<div class="card"><h2>データの共有</h2>
     <div class="alert ${state.err ? 'err' : 'ok'}">
       ${state.err ? '⚠ ' + esc(state.err) : '✓ ' + esc(state.msg) + '（このデータは許可された全員で共有されています）'}

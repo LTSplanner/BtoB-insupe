@@ -13,8 +13,17 @@ service cloud.firestore {
     /* 許可リスト本体。ログイン済みなら読める（自分が許可されているか判定するため）。
        書き換えは許可された人だけ。 */
     match /config/admins {
-      allow read:  if request.auth != null;
-      allow write: if allowed();
+      allow read: if request.auth != null;
+
+      /* 最初の1人だけ、自分ひとりを載せた状態で作れる（立ち上げ用）。
+         2人目以降の追加・削除は、すでに許可されている人しかできない。 */
+      allow create: if request.auth != null
+        && request.auth.token.email_verified == true
+        && request.resource.data.emails is list
+        && request.resource.data.emails.size() == 1
+        && request.resource.data.emails[0] == request.auth.token.email;
+
+      allow update, delete: if allowed();
     }
 
     /* スケジュールのデータ一式 */
