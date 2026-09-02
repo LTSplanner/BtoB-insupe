@@ -1,5 +1,5 @@
 /* サービスワーカー：一度開けば Wi-Fi が無くても使えるようにする */
-const VERSION = 'pm-sched-v5';
+const VERSION = 'pm-sched-v6';
 const SHELL = [
   './',
   './index.html',
@@ -7,15 +7,23 @@ const SHELL = [
   './icon-192.png',
   './icon-512.png',
   './icon-512-maskable.png',
-  './apple-touch-icon.png'
+  './apple-touch-icon.png',
+  './firebase-config.js',
+  './sync.js'
 ];
+
+/* 同期に使うライブラリ。ここもキャッシュしておかないと、圏外で開いたときに読み込めない */
+const SDK = 'https://www.gstatic.com/firebasejs/11.6.1/';
+const LIBS = [SDK+'firebase-app.js', SDK+'firebase-auth.js', SDK+'firebase-firestore.js'];
 
 self.addEventListener('install', function(e){
   e.waitUntil(
     caches.open(VERSION)
       .then(function(c){
         // data.js は手元でだけ置くファイル。無くても失敗させない
-        return c.addAll(SHELL).then(function(){ return c.add('./data.js').catch(function(){}); });
+        return c.addAll(SHELL)
+          .then(function(){ return c.add('./data.js').catch(function(){}); })
+          .then(function(){ return Promise.all(LIBS.map(function(u){ return c.add(u).catch(function(){}); })); });
       })
       .then(function(){ return self.skipWaiting(); })
   );
@@ -36,7 +44,22 @@ self.addEventListener('activate', function(e){
 self.addEventListener('fetch', function(e){
   const req = e.request;
   if(req.method !== 'GET') return;
-  if(new URL(req.url).origin !== self.location.origin) return;
+  const url = new URL(req.url);
+  /* 同期の通信（Firestore・ログイン）は素通しする。オフライン対応はFirestore側が持っている */
+  if(url.hostname.indexOf('googleapis.com')>=0 || url.hostname.indexOf('firebaseapp.com')>=0
+     || url.hostname.indexOf('google.com')>=0) return;
+  /* ライブラリはキャッシュ優先で返す（圏外でも起動できるように） */
+  if(url.href.indexOf(SDK)===0){
+    e.respondWith(caches.match(req).then(function(hit){
+      return hit || fetch(req).then(function(res){
+        const copy = res.clone();
+        caches.open(VERSION).then(function(c){ c.put(req, copy); });
+        return res;
+      });
+    }));
+    return;
+  }
+  if(url.origin !== self.location.origin) return;
 
   e.respondWith(
     caches.match(req).then(function(hit){

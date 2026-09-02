@@ -10,3 +10,6 @@ tests/
 # 先方の工程表・作業用スクリプト（公開しない）
 工程表/
 tools/
+セットアップ.md
+firebase-debug.log
+.firebase/

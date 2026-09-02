@@ -1,0 +1,30 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    /* 許可リスト（config/admins の emails 配列）に載っている人だけが読み書きできる。
+       管理者が画面からメールアドレスを追加すると、その人も使えるようになります。 */
+    function allowed() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email in get(/databases/$(database)/documents/config/admins).data.emails;
+    }
+
+    /* 許可リスト本体。ログイン済みなら読める（自分が許可されているか判定するため）。
+       書き換えは許可された人だけ。 */
+    match /config/admins {
+      allow read:  if request.auth != null;
+      allow write: if allowed();
+    }
+
+    /* スケジュールのデータ一式 */
+    match /orgs/{org}/{document=**} {
+      allow read, write: if allowed();
+    }
+
+    /* それ以外は禁止 */
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

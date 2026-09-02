@@ -115,7 +115,8 @@ table.grid thead th.sa{color:var(--accent)}
   <h1 id="appTitle">内覧会 スケジュール調整</h1>
   <span class="tag">プロトタイプ v0.3</span>
   <span class="tag" id="ruleTag"></span>
-  <span class="tag" id="netTag" style="margin-left:auto"></span>
+  <span class="tag" id="syncTag" style="margin-left:auto" hidden></span>
+  <span class="tag" id="netTag"></span>
   <button class="btn sm" id="installBtn" hidden onclick="doInstall()">アプリとして追加</button>
 </header>
 <nav>
@@ -136,6 +137,7 @@ table.grid thead th.sa{color:var(--accent)}
 </main>
 
 <script src="data.js"></script>
+<script src="firebase-config.js"></script>
 <script>
 /* ============================================================
    ドメインモデル
@@ -222,7 +224,17 @@ S.rules = {...RULES_DEFAULT, ...S.rules};
 if(!S.offs) S.offs = [];
 if(!S.tasks) S.tasks = {};
 
-function save(){ localStorage.setItem('pm_sched_v3', JSON.stringify(S)); }
+function saveLocal(){ localStorage.setItem('pm_sched_v3', JSON.stringify(S)); }
+function save(){ saveLocal(); if(window.SYNC && SYNC.push) SYNC.push(S); }
+/* 同期レイヤー（sync.js）から中身を差し替えるための入口。
+   受信したときは save() を呼ばない（送り返さないため） */
+window.__app = {
+  get S(){ return S; },
+  setColl(c, arr){ S[c] = arr; saveLocal(); },
+  setRules(r){ S.rules = {...RULES_DEFAULT, ...r}; saveLocal(); },
+  setTasks(t){ S.tasks = t || {}; saveLocal(); },
+  render(){ render(); }
+};
 function load(){ try{ return JSON.parse(localStorage.getItem('pm_sched_v3')); }catch(e){ return null; } }
 const uid = () => Math.random().toString(36).slice(2,9);
 
@@ -996,6 +1008,7 @@ function viewMembers(){
   const R=S.rules;
   const num=(k,l)=>`<div><label>${l}</label><input type="number" value="${R[k]}" onchange="S.rules.${k}=+this.value;save();render()" style="width:70px"> 名</div>`;
   return `
+  <div id="syncPanel"></div>
   <div class="card"><h2>ルール（厳守）</h2>
     <div class="row">
       ${num('maxPerDay','1日あたりの人数上限（自社＋外部）')}
@@ -1107,6 +1120,7 @@ function render(){
   const el = document.getElementById('nReq'); el.textContent = n||''; el.style.display = n?'':'none';
   document.getElementById('tab-'+TAB).innerHTML = TABS[TAB]();
   showNet();
+  if(window.SYNC && SYNC.renderPanel) SYNC.renderPanel();
 }
 
 /* 初回起動時は data.js の既存スケジュールを読み込む */
@@ -1175,5 +1189,6 @@ if(!P(S.ui.curProp) && S.properties.length){
 }
 render();
 </script>
+<script type="module" src="sync.js"></script>
 </body>
 </html>
