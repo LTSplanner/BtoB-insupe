@@ -5,3 +5,8 @@ tests/
 *.command
 *_backup_*.json
 .DS_Store
+作業ログ.md
+
+# 先方の工程表・作業用スクリプト（公開しない）
+工程表/
+tools/

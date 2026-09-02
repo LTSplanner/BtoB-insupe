@@ -152,6 +152,8 @@ const RULES_DEFAULT = {
   defaultNeeded: 4,           // 1棟あたりの必要のべ人数（1F3部屋＋共用12部屋＋4F共用＋外構 で4名がベース）
   roomsPerPerson: 3,          // 3部屋＋共用部で1人ベース
   countTrainees: false,       // 研修中スタッフを1日2名の人数に数えるか（既定：数えない）
+  traineesPerRegular: 1,      // 研修中：正規メンバー1名につき同行できる人数（例：正規2名の日は研修2名まで）
+  graduateAfter: 5,           // 研修→正規メンバーの目安（この棟数を対応したら切り替えを検討）
   // 打診は「先方から日付が届き始めたらすぐ」開始してよい（＝検査期間が入った時点で打診可）
   // Googleカレンダーの予定タイトル。実際の運用に合わせた形式
   titleTemplate: '{名前}さん　{元請け}　{コード}　{住所}'
@@ -176,7 +178,7 @@ function expand(r, today){
   const hasExt = Object.keys(r.a||{}).some(function(m){ return EXT_IDS.indexOf(m)>=0; });
   const prop = {id:'pm-'+r.code, name:r.addr, address:r.addr, code:r.code, units:'', note:r.note||'',
     status: r.end<today ? '完了' : (hasExt?'確定':'調整中'),
-    start:r.start, end:r.end, rooms:null, needed:RULES_DEFAULT.defaultNeeded, history:[]};
+    start:r.start, end:r.end, report:r.report||'', rooms:null, needed:RULES_DEFAULT.defaultNeeded, history:[]};
   const asg = [];
   Object.keys(r.a||{}).forEach(function(mid){
     r.a[mid].forEach(function(md){
@@ -212,6 +214,11 @@ let S = load() || {
   ui: {curProp:'', bookAs:'sugihara'}
 };
 S.rules = {...RULES_DEFAULT, ...S.rules};
+/* 旧データの移行：区分'trainee' → 自社スタッフ＋研修フラグ（研修は成長段階なので区分ではなくON/OFFで持つ） */
+(S.members||[]).forEach(m=>{
+  if(m.type==='trainee'){ m.type='internal'; m.trainee=true; }
+  if(m.trainee===undefined) m.trainee=false;
+});
 if(!S.offs) S.offs = [];
 if(!S.tasks) S.tasks = {};
 
@@ -235,11 +242,19 @@ const curP = () => P(S.ui.curProp) || S.properties[0];
 const asgOf = pid => S.assignments.filter(a=>a.propertyId===pid);
 const find = (pid,mid,date) => S.assignments.find(a=>a.propertyId===pid&&a.memberId===mid&&a.date===date);
 const isExt = mid => M(mid).type==='external';
-const isTrainee = mid => M(mid).type==='trainee';
+const isTrainee = mid => !!(M(mid)||{}).trainee;
+/* 正規メンバー＝研修中でない人（自社・外部を問わない） */
+const isRegular = mid => !isTrainee(mid);
 /* 人数としてカウントするか（研修中は既定でカウントしない） */
 const counts = a => a.status!=='requested' && (S.rules.countTrainees || !isTrainee(a.memberId));
 /* 枠を消費しているアサイン（hold + confirmed） */
 const booked = (pid,date) => asgOf(pid).filter(a=>a.date===date && counts(a));
+/* 研修中を含めた その日の全員（希望申請は除く） */
+const onDay = (pid,date) => asgOf(pid).filter(a=>a.date===date && a.status!=='requested');
+/* 研修中が同行できる上限＝その日の正規メンバー数 × 正規1名あたりの人数 */
+const traineeCap = (pid,date) => onDay(pid,date).filter(a=>isRegular(a.memberId)).length * (S.rules.traineesPerRegular||1);
+/* 研修中の対応棟数（希望申請は除く。5棟で正規メンバーへの切り替えを検討する） */
+const propsDone = mid => new Set(S.assignments.filter(a=>a.memberId===mid && a.status!=='requested').map(a=>a.propertyId)).size;
 const extConfirmedIn = pid => [...new Set(asgOf(pid).filter(a=>a.status==='confirmed'&&isExt(a.memberId)).map(a=>a.memberId))];
 
 /* ---- 必要のべ人数 ---- */
@@ -252,9 +267,14 @@ const neededFromRooms = rooms => Math.max(1, Math.ceil(rooms / S.rules.roomsPerP
 /* ---- 物件コード（260724-0726 形式）と予定タイトル ---- */
 function autoCode(s,e){ return s.replace(/-/g,'').slice(2)+'-'+e.replace(/-/g,'').slice(4); }
 const pcode = p => p.code || autoCode(p.start,p.end);
+/* 報告書提出日つきのコード（例：270222-0224(0225)）。工程表の赤いマス＝報告書の日 */
+const pcodeR = p => pcode(p) + (p.report ? `(${p.report.replace(/-/g,'').slice(4)})` : '');
+/* ドライブのフォルダ名／カレンダーの予定タイトルに使う登録名 */
+const regName = p => `${CLIENT}　${pcodeR(p)}　${p.name}`;
 function evTitle(p,m){
   return (S.rules.titleTemplate||'{名前}さん　{元請け}　{コード}　{住所}')
     .replace('{名前}', m?m.name:'').replace('{元請け}', CLIENT).replace('{コード}', pcode(p))
+    .replace('{コード＋報告書}', pcodeR(p)).replace('{報告書}', p.report?p.report.replace(/-/g,'').slice(4):'')
     .replace('{住所}', p.address||'').replace('{物件名}', p.name||'');
 }
 /* データが空のときの案内 */
@@ -392,8 +412,17 @@ function canConfirm(pid, mid, date){
   const dup = S.assignments.find(a=>a.memberId===mid && a.date===date && a.propertyId!==pid && a.status!=='requested');
   if(dup) return {ok:false, why:`他物件と重複（${P(dup.propertyId).name}）`};
 
-  // 研修中は同行なので人数上限の対象外
-  if(isTrainee(mid) && !S.rules.countTrainees) return {ok:true};
+  // 研修中は同行。1日2名の人数には数えないが、正規メンバー1名につき1名まで
+  if(isTrainee(mid) && !R.countTrainees){
+    const dayAll = onDay(pid,date);
+    if(dayAll.some(a=>a.memberId===mid)) return {ok:true};
+    const reg = dayAll.filter(a=>isRegular(a.memberId)).length;
+    const trn = dayAll.filter(a=>isTrainee(a.memberId)).length;
+    if(reg===0) return {ok:false, why:'この日はまだ正規メンバーがいません（研修は同行のみ）'};
+    if(trn >= traineeCap(pid,date))
+      return {ok:false, why:`研修中は正規${reg}名につき${traineeCap(pid,date)}名まで（この日は既に${trn}名）`};
+    return {ok:true};
+  }
 
   const day = booked(pid,date);
   const me  = day.find(a=>a.memberId===mid);
@@ -440,7 +469,18 @@ function violations(pid){
     const ext = day.filter(a=>isExt(a.memberId)).length;
     if(ext > R.maxExternalPerDay) out.push({lv:'err', msg:`${fmt(d)} 外部${ext}名（上限${R.maxExternalPerDay}名）`});
     if(day.length > cap) out.push({lv:'err', msg:`${fmt(d)} 合計${day.length}名（1日${cap}名まで）`});
+    if(!R.countTrainees){
+      const dayAll = onDay(pid,d);
+      const trn = dayAll.filter(a=>isTrainee(a.memberId)).length;
+      const reg = dayAll.filter(a=>isRegular(a.memberId)).length;
+      if(trn > reg*(R.traineesPerRegular||1))
+        out.push({lv:'err', msg:reg===0
+          ? `${fmt(d)} 研修中${trn}名だけになっています（同行する正規メンバーがいません）`
+          : `${fmt(d)} 研修中${trn}名（正規${reg}名につき${reg*(R.traineesPerRegular||1)}名まで）`});
+    }
   });
+  const grads = S.members.filter(m=>m.trainee && propsDone(m.id) >= (R.graduateAfter||5));
+  if(grads.length) out.push({lv:'warn', msg:`${grads.map(m=>m.name+'さん（'+propsDone(m.id)+'棟）').join('、')} が${R.graduateAfter}棟に到達しています。「メンバー / ルール」で研修のチェックを外すと正規メンバーになります`});
   return out;
 }
 
@@ -461,6 +501,22 @@ function add(pid,mid,date,status){
   save(); render();
 }
 function remove(a){ S.assignments = S.assignments.filter(x=>x!==a); save(); render(); }
+
+/* 研修のON/OFF（成長段階。{棟数}棟で正規メンバーへ、スキルを見て戻すこともできる） */
+function setTrainee(mid, on){
+  const m = M(mid); if(!m) return;
+  if(on && m.trainee) return;
+  m.trainee = !!on;
+  if(!on){
+    // 正規メンバーになると1日の人数に数え始めるので、上限を超える日が出ないか確認する
+    const over = [];
+    S.assignments.filter(a=>a.memberId===mid && a.status!=='requested').forEach(a=>{
+      if(booked(a.propertyId, a.date).length > S.rules.maxPerDay) over.push(`${P(a.propertyId).name} ${fmt(a.date)}`);
+    });
+    if(over.length) alert(`${m.name}さんを正規メンバーにしました。\n1日${S.rules.maxPerDay}名を超える日があります：\n・${[...new Set(over)].join('\n・')}`);
+  }
+  save(); render();
+}
 
 /* 外部が確定した日は、はみ出た自社の仮押さえを外す（＝Googleカレンダーの自社予定を削除） */
 function releaseHolds(pid,date){
@@ -488,7 +544,7 @@ function holdAll(pid){
     for(const d of days){
       if(totalBooked(pid) >= need) break;
       if(booked(pid,d).length >= cap) continue;
-      const cand = S.members.filter(m=>m.type==='internal' && !find(pid,m.id,d) && canConfirm(pid,m.id,d).ok)
+      const cand = S.members.filter(m=>m.type==='internal' && !m.trainee && !find(pid,m.id,d) && canConfirm(pid,m.id,d).ok)
         .sort((a,b)=> (a.load==='low')-(b.load==='low') || inProp(a.id)-inProp(b.id) || workload(a.id)-workload(b.id));
       if(!cand.length) continue;
       S.assignments.push({id:uid(),propertyId:pid,memberId:cand[0].id,date:d,status:'hold'});
@@ -552,9 +608,9 @@ function viewBoard(){
   if(!S.properties.length) return emptyState();
   const p = curP(), days = range(p.start,p.end), R=S.rules;
   const cap = R.maxPerDay, need = needOf(p), got = totalBooked(p.id);
-  const ints = S.members.filter(m=>m.type==='internal');
-  const exts = S.members.filter(m=>m.type==='external');
-  const trns = S.members.filter(m=>m.type==='trainee');
+  const ints = S.members.filter(m=>m.type==='internal' && !m.trainee);
+  const exts = S.members.filter(m=>m.type==='external' && !m.trainee);
+  const trns = S.members.filter(m=>m.trainee);
   const cfm = extConfirmedIn(p.id);
 
   const cell = (m,d) => {
@@ -569,8 +625,10 @@ function viewBoard(){
   const capRow = days.map(d=>{
     const day = booked(p.id,d);
     const ext = day.filter(a=>isExt(a.memberId)).length;
+    const trn = onDay(p.id,d).filter(a=>isTrainee(a.memberId)).length;
     const cls = day.length>cap?'over':day.length===0?'short':'ok';
-    return `<td><span class="cap ${cls}">${day.length}名</span><br><span class="muted" style="font-size:10px">${ext?'外'+ext:'—'}</span></td>`;
+    const sub = [ext?'外'+ext:'', trn?'研'+trn:''].filter(Boolean).join(' ') || '—';
+    return `<td><span class="cap ${cls}">${day.length}名</span><br><span class="muted" style="font-size:10px">${sub}</span></td>`;
   }).join('');
   const vio = violations(p.id);
 
@@ -580,7 +638,11 @@ function viewBoard(){
     <div class="row" style="justify-content:space-between">
       <div>
         <h2 style="margin:0">${p.name} <span class="badge st-${p.status}">${p.status}</span></h2>
-        <div class="muted"><span class="mono">${pcode(p)}</span> ／ ${p.address||'住所未定'} ／ ${p.units||'規模未入力'}</div>
+        <div class="muted"><span class="mono">${pcodeR(p)}</span> ／ ${p.address||'住所未定'} ／ ${p.units||'規模未入力'}</div>
+        <div class="row" style="gap:6px;margin-top:4px">
+          <input id="regname" value="${regName(p)}" readonly style="width:340px;max-width:100%" class="mono">
+          <button class="btn sm" onclick="cp('regname',this)">登録名をコピー</button>
+        </div>
         ${p.note?`<div class="muted" style="color:var(--ext)">※ ${p.note}</div>`:''}
       </div>
       <div class="row">
@@ -588,6 +650,8 @@ function viewBoard(){
           <input type="date" id="ts" value="${p.start}"> 〜 <input type="date" id="te" value="${p.end}">
           <button class="btn sm" onclick="changeTerm('${p.id}',ts.value,te.value)">工期変更</button>
         </div>
+        <div><label>報告書提出（工程表の赤いマス）</label>
+          <input type="date" value="${p.report||''}" onchange="P('${p.id}').report=this.value;save();render()"></div>
         <div><label>部屋数</label><input type="number" min="0" style="width:70px" placeholder="12" value="${p.rooms||''}"
           onchange="var v=+this.value; P('${p.id}').rooms=v||null; if(v) P('${p.id}').needed=neededFromRooms(v); save(); render()"></div>
         <div><label>必要のべ人数</label><input type="number" min="1" max="20" style="width:70px" value="${need}" onchange="P('${p.id}').needed=+this.value;save();render()"></div>
@@ -618,8 +682,8 @@ function viewBoard(){
         ${ints.map(m=>`<tr><td class="name">${m.name}${m.load==='low'?' <span class="muted">対応少なめ</span>':''}</td>${days.map(d=>`<td>${cell(m,d)}</td>`).join('')}</tr>`).join('')}
         <tr><td class="grp" colspan="${days.length+1}">外部インスペ（1棟 ${R.maxExternalPerProperty}名まで／1日 ${R.maxExternalPerDay}名まで）${cfm.length?` ー 確定: ${cfm.map(i=>M(i).name+'さん').join('、')}`:''}</td></tr>
         ${exts.map(m=>`<tr><td class="name">${m.name}さん</td>${days.map(d=>`<td>${cell(m,d)}</td>`).join('')}</tr>`).join('')}
-        ${trns.length?`<tr><td class="grp" colspan="${days.length+1}">研修中（同行。${S.rules.countTrainees?'人数に数える':'1日2名の人数には数えない'}）</td></tr>`:''}
-        ${trns.map(m=>`<tr><td class="name">${m.name}<span class="muted"> 研修中</span></td>${days.map(d=>`<td>${cell(m,d)}</td>`).join('')}</tr>`).join('')}
+        ${trns.length?`<tr><td class="grp" colspan="${days.length+1}">研修中（同行。${S.rules.countTrainees?'人数に数える':`1日${cap}名の人数には数えない／正規メンバー1名につき${R.traineesPerRegular}名まで`}）</td></tr>`:''}
+        ${trns.map(m=>`<tr><td class="name">${m.name}<span class="muted"> 研修中 ${propsDone(m.id)}/${R.graduateAfter}棟</span></td>${days.map(d=>`<td>${cell(m,d)}</td>`).join('')}</tr>`).join('')}
         <tr><td class="name" style="font-weight:600">確保状況</td>${capRow}</tr>
       </tbody>
     </table>
@@ -703,10 +767,12 @@ function viewProps(){
       <div><label>住所</label><input id="na" placeholder="東京都…" style="width:220px"></div>
       <div><label>検査開始</label><input type="date" id="ns" value="${d2s(new Date())}"></div>
       <div><label>検査終了</label><input type="date" id="ne" value="${addDays(d2s(new Date()),2)}"></div>
+      <div><label>報告書提出</label><input type="date" id="nrp"></div>
       <div><label>部屋数</label><input type="number" id="nr" placeholder="12" style="width:70px"></div>
       <button class="btn pri" onclick="addProp()">追加</button>
     </div>
-    <div class="muted" style="margin-top:8px">※ 住所だけ先行して来た場合は、物件名に住所を入れて「図面待ち」で登録 → 図面到着後に期間・部屋数を更新。<br>
+    <div class="muted" style="margin-top:8px">※ 工程表の <b>社内検査（黄色）＝弊社検査日</b>、その次の <b>赤いマス＝報告書</b>。最終確認は先方が行うので登録しません。<br>
+      ※ 住所だけ先行して来た場合は、物件名に住所を入れて「図面待ち」で登録 → 図面到着後に期間・部屋数を更新。<br>
       ※ 部屋数を入れると ${R.roomsPerPerson}部屋＋共用部で1人 の計算で必要のべ人数が入ります（未入力なら${R.defaultNeeded}名）。</div>
   </div>
   <div class="card">
@@ -724,8 +790,8 @@ function viewProps(){
       lastM=mk;
       return hdr+`<div class="pitem ${p.id===S.ui.curProp?'on':''}" onclick="S.ui.curProp='${p.id}';save();go('board')">
         <div>
-          <span class="mono">${pcode(p)}</span> <b>${p.name}</b> <span class="badge st-${p.status}">${p.status}</span> ${req?`<span class="badge" style="background:var(--req-soft);color:var(--req)">申請${req}件</span>`:''}${needsAsking(p)?` <span class="badge" style="background:#fff3d6;color:#8a6100">打診まだ</span>`:''}
-          <div class="muted">${fmtLong(p.start)}〜${fmtLong(p.end)}（${days.length}日）／ ${p.address||'住所未定'}</div>
+          <span class="mono">${pcodeR(p)}</span> <b>${p.name}</b> <span class="badge st-${p.status}">${p.status}</span> ${req?`<span class="badge" style="background:var(--req-soft);color:var(--req)">申請${req}件</span>`:''}${needsAsking(p)?` <span class="badge" style="background:#fff3d6;color:#8a6100">打診まだ</span>`:''}
+          <div class="muted">${fmtLong(p.start)}〜${fmtLong(p.end)}（${days.length}日）${p.report?` ／ 報告書 ${fmtLong(p.report)}まで`:''} ／ ${p.address||'住所未定'}</div>
           <div class="muted">のべ ${got}/${need}名 ／ 外部: ${cfm.length?cfm.map(i=>M(i).name+'さん').join('、'):'未定'}
             ／ 業務 ${tn}/${TASKS.length}<span class="minibar"><i style="width:${Math.round(tn/TASKS.length*100)}%"></i></span></div>
           ${p.note?`<div class="muted" style="color:var(--ext)">※ ${p.note}</div>`:''}
@@ -744,7 +810,7 @@ function addProp(){
   if(!np.value) return alert('物件名を入力してください');
   const rooms = +nr.value || null;
   S.properties.push({id:uid(), name:np.value, address:na.value, code:autoCode(ns.value,ne.value),
-    status:'図面待ち', start:ns.value, end:ne.value, rooms:rooms,
+    status:'図面待ち', start:ns.value, end:ne.value, rooms:rooms, report:nrp.value||'',
     needed: rooms?neededFromRooms(rooms):S.rules.defaultNeeded, units:'', note:'', history:[]});
   save(); render();
 }
@@ -939,23 +1005,37 @@ function viewMembers(){
       ${num('roomsPerPerson','1人あたりの担当部屋数')}
     </div>
     <div class="row" style="margin-top:10px">
+      ${num('traineesPerRegular','研修中：正規メンバー1名につき同行できる人数')}
+      <div><label>研修→正規の目安</label><input type="number" min="1" value="${R.graduateAfter}"
+        onchange="S.rules.graduateAfter=+this.value;save();render()" style="width:70px"> 棟</div>
+    </div>
+    <div class="muted">研修中は1日${S.rules.maxPerDay}名の人数に数えず、<b>正規メンバー1名につき${R.traineesPerRegular}名</b>が同行できます。
+      ${(function(){const r=S.members.filter(m=>m.type==='internal'&&!m.trainee);
+        return r.length>=2?`（例：${r[0].name}さんだけの日は研修1名、${r[0].name}さん＋${r[1].name}さんの日は研修2名）`
+                          :'（例：正規1名の日は研修1名、正規2名の日は研修2名）';})()}</div>
+    <div class="row" style="margin-top:10px">
       <label class="task" style="border:none;padding:0"><input type="checkbox" ${S.rules.countTrainees?'checked':''}
         onchange="S.rules.countTrainees=this.checked;save();render()">
-        <span>研修中スタッフも1日${S.rules.maxPerDay}名の人数に数える</span></label>
+        <span>研修中スタッフも1日${S.rules.maxPerDay}名の人数に数える（同行扱いをやめる）</span></label>
     </div>
     <div class="muted">1日${S.rules.maxPerDay}名までなのは「アカウントの関係」。3日で のべ${S.rules.defaultNeeded}名なら 1日目1人・2日目1人・3日目2人 のように割り振ります。</div>
     <h3>Googleカレンダーの予定タイトル</h3>
     <div class="row">
       <div style="flex:1"><input value="${S.rules.titleTemplate}" onchange="S.rules.titleTemplate=this.value;save();render()" style="width:100%;max-width:520px"></div>
     </div>
-    <div class="muted">使える差し込み：<span class="mono">{名前} {元請け} {コード} {住所} {物件名}</span>
+    <div class="muted">使える差し込み：<span class="mono">{名前} {元請け} {コード} {コード＋報告書} {報告書} {住所} {物件名}</span>
       例）<span class="mono">${sampleTitle()}</span></div>
   </div>
   <div class="card"><h2>メンバー</h2>
-    <div class="scroll"><table class="grid"><thead><tr><th class="name">氏名</th><th>区分</th><th>稼働</th><th class="name">メール</th><th></th></tr></thead><tbody>
+    <div class="muted">研修は成長段階です。${R.graduateAfter}棟 対応できたら「研修」のチェックを外して正規メンバーにします。
+      スキルを見て戻す場合も、同じチェックを入れ直すだけです。</div>
+    <div class="scroll"><table class="grid"><thead><tr><th class="name">氏名</th><th>区分</th><th>研修</th><th>対応棟数</th><th>稼働</th><th class="name">メール</th><th></th></tr></thead><tbody>
     ${S.members.map(m=>`<tr>
-      <td class="name">${m.name}</td>
-      <td><span class="badge">${m.type==='internal'?'自社':m.type==='trainee'?'研修中':'外部'}</span></td>
+      <td class="name">${m.name}${m.trainee?' <span class="muted">研修中</span>':''}</td>
+      <td><span class="badge">${m.type==='internal'?'自社':'外部'}</span></td>
+      <td><label class="task" style="border:none;padding:0;justify-content:center"><input type="checkbox" ${m.trainee?'checked':''}
+        onchange="setTrainee('${m.id}',this.checked)" title="研修中（同行扱い。1日の人数に数えない）"></label></td>
+      <td>${propsDone(m.id)}棟${m.trainee&&propsDone(m.id)>=R.graduateAfter?' <span class="badge st-確定">卒業候補</span>':''}</td>
       <td>${m.type==='internal'?`<select onchange="M('${m.id}').load=this.value;save()"><option value="normal" ${m.load==='normal'?'selected':''}>通常</option><option value="low" ${m.load==='low'?'selected':''}>少なめ</option></select>`:'—'}</td>
       <td class="name"><input value="${m.email||''}" onchange="M('${m.id}').email=this.value;save()" style="width:230px"></td>
       <td><button class="btn sm danger" onclick="if(confirm('削除？')){S.members=S.members.filter(x=>x.id!=='${m.id}');S.assignments=S.assignments.filter(a=>a.memberId!=='${m.id}');save();render()}">削除</button></td>
@@ -964,9 +1044,10 @@ function viewMembers(){
     <h3>追加</h3>
     <div class="row">
       <div><label>氏名</label><input id="mn" style="width:120px"></div>
-      <div><label>区分</label><select id="mt"><option value="internal">自社</option><option value="external">外部</option><option value="trainee">研修中</option></select></div>
+      <div><label>区分</label><select id="mt"><option value="internal">自社</option><option value="external">外部</option></select></div>
+      <div><label>研修</label><label class="task" style="border:none;padding:0"><input type="checkbox" id="mtr"><span class="muted">研修中</span></label></div>
       <div><label>メール</label><input id="me2" style="width:220px"></div>
-      <button class="btn pri" onclick="if(mn.value){S.members.push({id:uid(),name:mn.value,type:mt.value,load:'normal',email:me2.value});save();render()}">追加</button>
+      <button class="btn pri" onclick="if(mn.value){S.members.push({id:uid(),name:mn.value,type:mt.value,trainee:mtr.checked,load:'normal',email:me2.value});save();render()}">追加</button>
     </div>
   </div>
   <div class="card"><h2>OFF（休み・不在）</h2>
