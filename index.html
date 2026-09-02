@@ -156,6 +156,8 @@ const RULES_DEFAULT = {
   countTrainees: false,       // 研修中スタッフを1日2名の人数に数えるか（既定：数えない）
   traineesPerRegular: 1,      // 研修中：正規メンバー1名につき同行できる人数（例：正規2名の日は研修2名まで）
   graduateAfter: 5,           // 研修→正規メンバーの目安（この棟数を対応したら切り替えを検討）
+  workStart: '09:00',         // カレンダー予定の開始時刻
+  workEnd:   '18:00',         // カレンダー予定の終了時刻
   // 打診は「先方から日付が届き始めたらすぐ」開始してよい（＝検査期間が入った時点で打診可）
   // Googleカレンダーの予定タイトル。実際の運用に合わせた形式
   titleTemplate: '{名前}さん　{元請け}　{コード}　{住所}'
@@ -888,11 +890,31 @@ function blocks(pid,mid){
   return out;
 }
 const blkStr = b => b.start===b.end ? fmtLong(b.start) : `${fmtLong(b.start)}〜${fmtLong(b.end)}`;
-function gcalUrl(p, m, b){
-  const t = evTitle(p,m);
-  const dates = `${b.start.replace(/-/g,'')}/${addDays(b.end,1).replace(/-/g,'')}`;
-  const det = `物件: ${p.name}\n住所: ${p.address||''}\n規模: ${p.units||''}\n主催: ${ORGANIZER}`;
-  return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(t)}&dates=${dates}&details=${encodeURIComponent(det)}&location=${encodeURIComponent(p.address||'')}&add=${encodeURIComponent(m.email)}`;
+
+/* ---- カレンダー（1日＝1予定。既定 9:00〜18:00） ---- */
+/* カレンダーに入れる日。希望申請（未承認）は入れない */
+const evDates = (pid,mid) => asgOf(pid).filter(a=>a.memberId===mid && a.status!=='requested')
+                                       .map(a=>a.date).sort();
+/* カレンダーに入れる人（自社の仮押さえも含む。並び順は表示と揃える） */
+const evMembers = pid => S.members.filter(m=>evDates(pid,m.id).length);
+/* 日本時間の h:mm を、そのままUTC表記の文字列にする（端末の時計に左右されない） */
+function jstStamp(date, hm){
+  const [y,mo,d]=date.split('-').map(Number), [h,mi]=hm.split(':').map(Number);
+  const t = new Date(Date.UTC(y, mo-1, d, h-9, mi, 0));
+  const z = n => String(n).padStart(2,'0');
+  return `${t.getUTCFullYear()}${z(t.getUTCMonth()+1)}${z(t.getUTCDate())}T${z(t.getUTCHours())}${z(t.getUTCMinutes())}00Z`;
+}
+const evStart = d => jstStamp(d, S.rules.workStart||'09:00');
+const evEnd   = d => jstStamp(d, S.rules.workEnd||'18:00');
+function evDetail(p){
+  return `物件: ${p.name}\n住所: ${p.address||''}\n規模: ${p.units||''}${p.report?`\n報告書: ${fmtLong(p.report)}まで`:''}\n主催: ${ORGANIZER}`;
+}
+function gcalUrl(p, m, date){
+  const dates = `${evStart(date)}/${evEnd(date)}`;
+  return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(evTitle(p,m))}`
+    + `&dates=${dates}&details=${encodeURIComponent(evDetail(p))}`
+    + `&location=${encodeURIComponent(p.address||'')}`
+    + (isExt(m.id)&&m.email?`&add=${encodeURIComponent(m.email)}`:'');
 }
 function viewMsg(){
   if(!S.properties.length) return emptyState();
@@ -969,30 +991,32 @@ ${cfm.map(id=>`　${M(id).name}さん：${blocks(p.id,id).map(blkStr).join('、'
 
   <div class="card">
     <h2>④ Googleカレンダー登録</h2>
-    <div class="muted">現状は暫定実装です。主催アカウント <span class="mono">${ORGANIZER}</span> でログインした状態でボタンを押すと、タイトル・日程・ゲスト招待が入力済みの作成画面が開きます。</div>
-    ${cfm.length===0?`<div class="alert warn" style="margin-top:10px">確定した外部インスペがまだいません。</div>`:
-      cfm.map(id=>{const m=M(id);return `<h3>${m.name}さん <span class="mono">${m.email}</span></h3>` +
-        blocks(p.id,id).map(b=>`<div class="row" style="align-items:center;gap:10px;padding:4px 0">
-          <span style="width:230px">${blkStr(b)}</span>
+    <div class="muted">1日＝1予定で <b>${S.rules.workStart}〜${S.rules.workEnd}</b> に入れます。主催アカウント <span class="mono">${ORGANIZER}</span> でログインした状態でボタンを押すと、タイトル・日程・ゲスト招待が入力済みの作成画面が開きます。<br>
+      外部インスペはゲスト招待つき、自社スタッフは予定だけを作ります。</div>
+    ${evMembers(p.id).length===0?`<div class="alert warn" style="margin-top:10px">まだ誰も入っていません。</div>`:
+      evMembers(p.id).map(m=>`<h3>${m.name}${isExt(m.id)?'さん':''}${m.trainee?'<span class="muted"> 研修中</span>':''} <span class="mono">${m.email||'メール未登録'}</span></h3>` +
+        evDates(p.id,m.id).map(d=>`<div class="row" style="align-items:center;gap:10px;padding:4px 0">
+          <span style="width:170px">${fmtLong(d)} ${S.rules.workStart}〜${S.rules.workEnd}</span>
           <span class="mono">${evTitle(p,m)}</span>
-          <a class="btn sm" target="_blank" href="${gcalUrl(p,m,b)}">カレンダーに追加</a>
-        </div>`).join('')}).join('')}
-    <div style="margin-top:12px"><button class="btn" onclick="downloadIcs('${p.id}')">.ics を一括ダウンロード</button></div>
+          <a class="btn sm" target="_blank" href="${gcalUrl(p,m,d)}">カレンダーに追加</a>
+        </div>`).join('')).join('')}
+    <div style="margin-top:12px"><button class="btn" onclick="downloadIcs('${p.id}')">.ics を一括ダウンロード（全員ぶん）</button></div>
   </div>`;
 }
 function cp(id,btn){ navigator.clipboard.writeText(document.getElementById(id).value); btn.textContent='コピーしました'; }
 function downloadIcs(pid){
   const p=P(pid); const out=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//LTS//sched//JA'];
-  extConfirmedIn(pid).forEach(id=>{
-    const m=M(id);
-    blocks(pid,id).forEach(b=>{
+  evMembers(pid).forEach(m=>{
+    evDates(pid,m.id).forEach(d=>{
       out.push('BEGIN:VEVENT',`UID:${uid()}@lts`,
-        `DTSTART;VALUE=DATE:${b.start.replace(/-/g,'')}`,
-        `DTEND;VALUE=DATE:${addDays(b.end,1).replace(/-/g,'')}`,
+        `DTSTART:${evStart(d)}`,
+        `DTEND:${evEnd(d)}`,
         `SUMMARY:${evTitle(p,m)}`,
+        `DESCRIPTION:${evDetail(p).replace(/\n/g,'\\n')}`,
         `LOCATION:${p.address||''}`,
-        `ORGANIZER;CN=${SENDER}:mailto:${ORGANIZER}`,
-        `ATTENDEE;CN=${m.name};RSVP=TRUE:mailto:${m.email}`,'END:VEVENT');
+        `ORGANIZER;CN=${SENDER}:mailto:${ORGANIZER}`);
+      if(isExt(m.id) && m.email) out.push(`ATTENDEE;CN=${m.name};RSVP=TRUE:mailto:${m.email}`);
+      out.push('END:VEVENT');
     });
   });
   out.push('END:VCALENDAR');
@@ -1021,6 +1045,9 @@ function viewMembers(){
       ${num('traineesPerRegular','研修中：正規メンバー1名につき同行できる人数')}
       <div><label>研修→正規の目安</label><input type="number" min="1" value="${R.graduateAfter}"
         onchange="S.rules.graduateAfter=+this.value;save();render()" style="width:70px"> 棟</div>
+      <div><label>カレンダーの時間</label>
+        <input type="time" value="${R.workStart}" onchange="S.rules.workStart=this.value;save();render()">
+        〜 <input type="time" value="${R.workEnd}" onchange="S.rules.workEnd=this.value;save();render()"></div>
     </div>
     <div class="muted">研修中は1日${S.rules.maxPerDay}名の人数に数えず、<b>正規メンバー1名につき${R.traineesPerRegular}名</b>が同行できます。
       ${(function(){const r=S.members.filter(m=>m.type==='internal'&&!m.trainee);
@@ -1044,7 +1071,7 @@ function viewMembers(){
       スキルを見て戻す場合も、同じチェックを入れ直すだけです。</div>
     <div class="scroll"><table class="grid"><thead><tr><th class="name">氏名</th><th>区分</th><th>研修</th><th>対応棟数</th><th>稼働</th><th class="name">メール</th><th></th></tr></thead><tbody>
     ${S.members.map(m=>`<tr>
-      <td class="name">${m.name}${m.trainee?' <span class="muted">研修中</span>':''}</td>
+      <td class="name">${m.full||m.name}${m.trainee?' <span class="muted">研修中</span>':''}</td>
       <td><span class="badge">${m.type==='internal'?'自社':'外部'}</span></td>
       <td><label class="task" style="border:none;padding:0;justify-content:center"><input type="checkbox" ${m.trainee?'checked':''}
         onchange="setTrainee('${m.id}',this.checked)" title="研修中（同行扱い。1日の人数に数えない）"></label></td>

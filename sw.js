@@ -1,5 +1,5 @@
 /* サービスワーカー：一度開けば Wi-Fi が無くても使えるようにする */
-const VERSION = 'pm-sched-v6';
+const VERSION = 'pm-sched-v7';
 const SHELL = [
   './',
   './index.html',
