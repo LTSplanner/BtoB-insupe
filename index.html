@@ -235,7 +235,26 @@ window.__app = {
   setColl(c, arr){ S[c] = arr; saveLocal(); },
   setRules(r){ S.rules = {...RULES_DEFAULT, ...r}; saveLocal(); },
   setTasks(t){ S.tasks = t || {}; saveLocal(); },
-  render(){ render(); }
+  render(){ render(); },
+  get clientName(){ return CLIENT; },
+  /* 工程表PDFの読み取り結果から物件を登録する（pdf-import.js から呼ばれる） */
+  addProperty(o){
+    const rooms = o.rooms || null;
+    const p = {id:uid(), name:o.name, address:o.address||'', code:autoCode(o.start,o.end),
+      status:'調整中', start:o.start, end:o.end, report:o.report||'', rooms:rooms,
+      needed: rooms?neededFromRooms(rooms):S.rules.defaultNeeded, units:'', note:'', history:[]};
+    const dup = S.properties.find(x=>x.code===p.code && x.name===p.name);
+    if(dup){
+      if(!confirm(`${p.name}（${p.code}）は登録済みです。日程を上書きしますか？`)) return;
+      Object.assign(dup, {start:p.start, end:p.end, report:p.report});
+      S.ui.curProp = dup.id;
+    }else{
+      S.properties.push(p);
+      S.ui.curProp = p.id;
+    }
+    save(); go('board');
+    alert(`${p.name} を登録しました。\n検査 ${fmtLong(p.start)}〜${fmtLong(p.end)}${p.report?`／報告書 ${fmtLong(p.report)}まで`:''}`);
+  }
 };
 function load(){ try{ return JSON.parse(localStorage.getItem('pm_sched_v3')); }catch(e){ return null; } }
 const uid = () => Math.random().toString(36).slice(2,9);
@@ -785,6 +804,12 @@ function viewProps(){
       <div><label>部屋数</label><input type="number" id="nr" placeholder="12" style="width:70px"></div>
       <button class="btn pri" onclick="addProp()">追加</button>
     </div>
+    <div class="row" style="margin-top:12px;gap:8px;align-items:center;padding:10px;border:2px dashed var(--line);border-radius:8px">
+      <b>工程表PDFから登録</b>
+      <label class="btn pri" style="margin:0">工程表PDFを選ぶ
+        <input type="file" accept="application/pdf,.pdf" style="display:none" onchange="PDFIMPORT.pick(this)"></label>
+      <span class="muted">画面のどこにでも <b>ドラッグ&amp;ドロップ</b> できます。検査日と報告書の日を読み取って、確認画面を出します。</span>
+    </div>
     <div class="muted" style="margin-top:8px">※ 工程表の <b>社内検査（黄色）＝弊社検査日</b>、その次の <b>赤いマス＝報告書</b>。最終確認は先方が行うので登録しません。<br>
       ※ 住所だけ先行して来た場合は、物件名に住所を入れて「図面待ち」で登録 → 図面到着後に期間・部屋数を更新。<br>
       ※ 部屋数を入れると ${R.roomsPerPerson}部屋＋共用部で1人 の計算で必要のべ人数が入ります（未入力なら${R.defaultNeeded}名）。</div>
@@ -909,11 +934,17 @@ const evEnd   = d => jstStamp(d, S.rules.workEnd||'18:00');
 function evDetail(p){
   return `物件: ${p.name}\n住所: ${p.address||''}\n規模: ${p.units||''}${p.report?`\n報告書: ${fmtLong(p.report)}まで`:''}\n主催: ${ORGANIZER}`;
 }
+/* どのカレンダーに作るか。
+   外部インスペ … 主催アカウントのカレンダーに作り、本人をゲスト招待する
+   自社スタッフ … 本人のカレンダーに作る（ゲスト招待はしない） */
+const evCalendar = m => isExt(m.id) ? (ORGANIZER||'') : (m.email||'');
 function gcalUrl(p, m, date){
   const dates = `${evStart(date)}/${evEnd(date)}`;
+  const src = evCalendar(m);
   return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(evTitle(p,m))}`
     + `&dates=${dates}&details=${encodeURIComponent(evDetail(p))}`
     + `&location=${encodeURIComponent(p.address||'')}`
+    + (src?`&src=${encodeURIComponent(src)}`:'')
     + (isExt(m.id)&&m.email?`&add=${encodeURIComponent(m.email)}`:'');
 }
 function viewMsg(){
@@ -991,8 +1022,9 @@ ${cfm.map(id=>`　${M(id).name}さん：${blocks(p.id,id).map(blkStr).join('、'
 
   <div class="card">
     <h2>④ Googleカレンダー登録</h2>
-    <div class="muted">1日＝1予定で <b>${S.rules.workStart}〜${S.rules.workEnd}</b> に入れます。主催アカウント <span class="mono">${ORGANIZER}</span> でログインした状態でボタンを押すと、タイトル・日程・ゲスト招待が入力済みの作成画面が開きます。<br>
-      外部インスペはゲスト招待つき、自社スタッフは予定だけを作ります。</div>
+    <div class="muted">1日＝1予定で <b>${S.rules.workStart}〜${S.rules.workEnd}</b> に入れます。ボタンを押すと、タイトル・日程・招待が入力済みの作成画面が開きます。<br>
+      ・<b>外部インスペ</b>… <span class="mono">${ORGANIZER}</span> のカレンダーに作り、本人のアカウントを<b>ゲストに招待</b>します（このアカウントでログインした状態で押してください）<br>
+      ・<b>自社スタッフ</b>… 本人のカレンダーに作ります（ゲスト招待はしません）</div>
     ${evMembers(p.id).length===0?`<div class="alert warn" style="margin-top:10px">まだ誰も入っていません。</div>`:
       evMembers(p.id).map(m=>`<h3>${m.name}${isExt(m.id)?'さん':''}${m.trainee?'<span class="muted"> 研修中</span>':''} <span class="mono">${m.email||'メール未登録'}</span></h3>` +
         evDates(p.id,m.id).map(d=>`<div class="row" style="align-items:center;gap:10px;padding:4px 0">
@@ -1009,6 +1041,7 @@ function downloadIcs(pid){
   evMembers(pid).forEach(m=>{
     evDates(pid,m.id).forEach(d=>{
       out.push('BEGIN:VEVENT',`UID:${uid()}@lts`,
+        `X-LTS-CALENDAR:${evCalendar(m)}`,
         `DTSTART:${evStart(d)}`,
         `DTEND:${evEnd(d)}`,
         `SUMMARY:${evTitle(p,m)}`,
@@ -1216,6 +1249,7 @@ if(!P(S.ui.curProp) && S.properties.length){
 }
 render();
 </script>
+<script src="pdf-import.js"></script>
 <script type="module" src="sync.js"></script>
 </body>
 </html>

@@ -1,5 +1,5 @@
 /* サービスワーカー：一度開けば Wi-Fi が無くても使えるようにする */
-const VERSION = 'pm-sched-v7';
+const VERSION = 'pm-sched-v8';
 const SHELL = [
   './',
   './index.html',
@@ -9,12 +9,15 @@ const SHELL = [
   './icon-512-maskable.png',
   './apple-touch-icon.png',
   './firebase-config.js',
-  './sync.js'
+  './sync.js',
+  './pdf-import.js'
 ];
 
 /* 同期に使うライブラリ。ここもキャッシュしておかないと、圏外で開いたときに読み込めない */
 const SDK = 'https://www.gstatic.com/firebasejs/11.6.1/';
-const LIBS = [SDK+'firebase-app.js', SDK+'firebase-auth.js', SDK+'firebase-firestore.js'];
+const PDFJS = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
+const LIBS = [SDK+'firebase-app.js', SDK+'firebase-auth.js', SDK+'firebase-firestore.js',
+              PDFJS+'pdf.min.js', PDFJS+'pdf.worker.min.js'];
 
 self.addEventListener('install', function(e){
   e.waitUntil(
@@ -49,7 +52,7 @@ self.addEventListener('fetch', function(e){
   if(url.hostname.indexOf('googleapis.com')>=0 || url.hostname.indexOf('firebaseapp.com')>=0
      || url.hostname.indexOf('google.com')>=0) return;
   /* ライブラリはキャッシュ優先で返す（圏外でも起動できるように） */
-  if(url.href.indexOf(SDK)===0){
+  if(url.href.indexOf(SDK)===0 || url.href.indexOf(PDFJS)===0){
     e.respondWith(caches.match(req).then(function(hit){
       return hit || fetch(req).then(function(res){
         const copy = res.clone();
